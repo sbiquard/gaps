@@ -89,13 +89,17 @@ def fit_psd_to_tod(
     welch: bool = True,
     nperseg: int = 8192,
     bin: bool = True,
+    return_periodogram: bool = False,
 ):
     if welch:
         f, psd = scipy.signal.welch(tod, fs=fsamp, detrend=detrend, nperseg=nperseg)
     else:
         f, psd = scipy.signal.periodogram(tod, fs=fsamp, detrend=detrend, window='hann')
 
-    return fit_model(f[1:], psd[1:], bin=bin)
+    if return_periodogram:
+        return fit_model(f[1:], psd[1:], bin=bin)[0], f, psd
+    else:
+        return fit_model(f[1:], psd[1:], bin=bin)[0]
 
 
 def log_psd_model(x, sigma, alpha, fk, f0):
@@ -236,7 +240,7 @@ def sim_noise(
             samples=samples,
             freq=freq,
             psd=psd,
-        )
+        ).array()
 
     # Using C implementation (mappraiser)
     if not py:

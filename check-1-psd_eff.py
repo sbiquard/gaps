@@ -23,8 +23,8 @@ freq = np.fft.rfftfreq(samples, 1 / fsamp)
 npsd = len(freq) - 1
 
 # PSD model
-# PSD fit log(sigma2) = -9.65, alpha = -0.87, fknee = 0.05, fmin = 8.84e-04
-sigma2 = 1
+# log(sigma) = -4.82, alpha = -0.87, fknee = 0.05, fmin = 8.84e-04
+sigma2 = 10**-4.82
 alpha = 2.87
 fknee = 1.05
 fmin = 8.84e-4

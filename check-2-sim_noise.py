@@ -19,9 +19,8 @@ detindx = 0
 fsamp = 37
 samples = 100000
 
-# PSD fit log(sigma2) = -9.65, alpha = -0.87, fknee = 0.05, fmin = 8.84e-04
-# sigma2 = 10**(-9.65)
-sigma2 = 1
+# log(sigma) = -4.82, alpha = -0.87, fknee = 0.05, fmin = 8.84e-04
+sigma2 = 10**-4.82
 alpha = 2.87
 fknee = 1.05
 fmin = 8.84e-4
@@ -98,7 +97,7 @@ plt.subplot(2, 1, 2)
 plt.title('Measured PSDs')
 
 # Fit parameters for py_ntt and plot
-py_ntt_params = utils.fit_psd_to_tod(tods['py_ntt'][0], fsamp)[0]
+py_ntt_params = utils.fit_psd_to_tod(tods['py_ntt'][0], fsamp)
 plt.loglog(
     freq[1:],
     utils.psd_model(freq[1:], *py_ntt_params),
@@ -109,7 +108,7 @@ print(
 )
 
 # Fit parameters for c_ntt and plot
-c_ntt_params = utils.fit_psd_to_tod(tods['c_ntt'][0], fsamp)[0]
+c_ntt_params = utils.fit_psd_to_tod(tods['c_ntt'][0], fsamp)
 plt.loglog(
     freq[1:],
     utils.psd_model(freq[1:], *c_ntt_params),
@@ -120,7 +119,7 @@ print(
 )
 
 # Fit parameters for toast_psd and plot
-toast_psd_params = utils.fit_psd_to_tod(tods['toast_psd'][0], fsamp)[0]
+toast_psd_params = utils.fit_psd_to_tod(tods['toast_psd'][0], fsamp)
 plt.loglog(
     freq[1:],
     utils.psd_model(freq[1:], *toast_psd_params),
@@ -131,7 +130,7 @@ print(
 )
 
 # Fit parameters for py_psd and plot
-py_psd_params = utils.fit_psd_to_tod(tods['py_psd'][0], fsamp)[0]
+py_psd_params = utils.fit_psd_to_tod(tods['py_psd'][0], fsamp)
 plt.loglog(
     freq[1:],
     utils.psd_model(freq[1:], *py_psd_params),
@@ -159,11 +158,11 @@ psds_hann = {key: np.empty((n_real, freq.size)) for key in tods.keys()}
 for i in trange(n_real):
     for key in tods.keys():
         # Simple periodogram PSDs with Hann window
-        fit_params_simple = utils.fit_psd_to_tod(tods[key][i], fsamp, welch=False)[0]
+        fit_params_simple = utils.fit_psd_to_tod(tods[key][i], fsamp, welch=False)
         psds_simple[key][i] = utils.psd_model(freq, *fit_params_simple)
 
         # Welch PSDs
-        fit_params_welch = utils.fit_psd_to_tod(tods[key][i], fsamp, welch=True)[0]
+        fit_params_welch = utils.fit_psd_to_tod(tods[key][i], fsamp, welch=True)
         psds_hann[key][i] = utils.psd_model(freq, *fit_params_welch)
 
 fig, axs = plt.subplots(1, 2, figsize=(10, 4))
