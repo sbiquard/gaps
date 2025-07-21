@@ -1,13 +1,12 @@
 import numpy as np
 import numpy.typing as npt
+import scipy.signal
 from scipy.optimize import curve_fit
 from scipy.signal import get_window
 from toast import rng
 from toast.ops.sim_tod_noise import sim_noise_timestream
 
 import mappraiser.wrapper as mappraiser
-
-WELCH_SEGMENT_DURATION = 300  # 5 minutes
 
 
 def pairwise(iterable):
@@ -70,7 +69,7 @@ def fit_model(f, pxx, *, bin: bool):
         f, pxx = bin_psd(f, pxx)
 
     return curve_fit(
-        log_model,
+        log_psd_model,
         f,
         np.log10(pxx),
         p0=p0,
@@ -79,11 +78,31 @@ def fit_model(f, pxx, *, bin: bool):
     )
 
 
-def log_model(x, sigma, alpha, fk, f0):
+# ____________________________________________________________
+# PSD estimation
+
+
+def fit_psd_to_tod(
+    tod,
+    fsamp,
+    detrend: str = 'linear',
+    welch: bool = True,
+    nperseg: int = 8192,
+    bin: bool = True,
+):
+    if welch:
+        f, psd = scipy.signal.welch(tod, fs=fsamp, detrend=detrend, nperseg=nperseg)
+    else:
+        f, psd = scipy.signal.periodogram(tod, fs=fsamp, detrend=detrend, window='hann')
+
+    return fit_model(f[1:], psd[1:], bin=bin)
+
+
+def log_psd_model(x, sigma, alpha, fk, f0):
     return 2 * np.log10(sigma) + np.log10(1 + ((x + f0) / fk) ** -alpha)
 
 
-def model(x, sigma, alpha, fk, f0):
+def psd_model(x, sigma, alpha, fk, f0):
     return sigma**2 * (1 + ((x + f0) / fk) ** -alpha)
 
 

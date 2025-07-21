@@ -30,7 +30,7 @@ fknee = 1.05
 fmin = 8.84e-4
 
 # PSD model / effective
-psd = utils.model(freq, sigma2, alpha, fknee, fmin)
+psd = utils.psd_model(freq, sigma2, alpha, fknee, fmin)
 ipsd = 1 / psd
 # psd[0] = 0
 
@@ -74,18 +74,19 @@ for ax in axs[:, 0]:
     ax.loglog(freq[1:], psd[1:], c='k', label='model')
 
 # Plots curves for different lambda values
-cm = plt.get_cmap('Set1')
-for i, lambd in enumerate((4096, 8192, 16384, 32768)):
+lambdas = [4096, 8192, 16384, 32768]
+cm = sns.color_palette('Set1', n_colors=len(lambdas))
+for i, lambd in enumerate(lambdas):
     # PSD eff from `tt`
     tt_model = utils.psd_to_ntt(psd, lambd)
     psd_eff = utils.autocorr_to_psd(tt_model, samples)
 
-    axs[0, 0].loglog(freq[1:], psd_eff[1:], c=cm(i), label=f'$\\lambda={lambd}$')
+    axs[0, 0].loglog(freq[1:], psd_eff[1:], c=cm[i], label=f'$\\lambda={lambd}$')
     axs[0, 1].semilogx(
         freq[1:],
         # (psd_eff - psd)[1:] / psd[1:],
         10 * np.log10(psd_eff[1:] / psd[1:]),
-        c=cm(i),
+        c=cm[i],
         label=f'$\\lambda={lambd}$',
     )
 
@@ -93,33 +94,32 @@ for i, lambd in enumerate((4096, 8192, 16384, 32768)):
     itt_model = utils.psd_to_ntt(ipsd, lambd)
     ipsd_eff = utils.autocorr_to_psd(itt_model, samples)
 
-    axs[1, 0].loglog(freq[1:], 1 / ipsd_eff[1:], c=cm(i), label=f'$\\lambda={lambd}$')
+    axs[1, 0].loglog(freq[1:], 1 / ipsd_eff[1:], c=cm[i], label=f'$\\lambda={lambd}$')
     axs[1, 1].semilogx(
         freq[1:],
         # (1 / ipsd_eff - psd)[1:] / psd[1:],
         10 * np.log10(np.reciprocal(ipsd_eff[1:]) / psd[1:]),
-        c=cm(i),
+        c=cm[i],
         label=f'$\\lambda={lambd}$',
     )
-    axs[1, 1].axvline(x=cutoff(lambd), c=cm(i), ls=':')
+    axs[1, 1].axvline(x=cutoff(lambd), c=cm[i], ls=':')
 
     # PSD eff as `ifft(1/fft(inv_tt))`
     tt_modified = utils.psd_to_ntt(np.reciprocal(ipsd_eff), lambd)
-    print(tt_modified)
     psd_eff_mod = utils.autocorr_to_psd(tt_modified, samples)
 
-    axs[2, 0].loglog(freq[1:], psd_eff_mod[1:], c=cm(i), label=f'$\\lambda={lambd}$')
+    axs[2, 0].loglog(freq[1:], psd_eff_mod[1:], c=cm[i], label=f'$\\lambda={lambd}$')
     axs[2, 1].semilogx(
         freq[1:],
         # (psd_eff_mod - psd)[1:] / psd[1:],
         10 * np.log10(psd_eff_mod[1:] / psd[1:]),
-        c=cm(i),
+        c=cm[i],
         label=f'$\\lambda={lambd}$',
     )
 
     # Plot a dashed line at `fsamp/lambda`
     for ax in axs.flat:
-        ax.axvline(x=fsamp / lambd, c=cm(i), ls='--')
+        ax.axvline(x=fsamp / lambd, c=cm[i], ls='--')
 
 for ax in axs.flat:
     ax.legend()
