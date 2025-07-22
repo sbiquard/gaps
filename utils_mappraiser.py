@@ -240,7 +240,7 @@ def sim_noise(
             samples=samples,
             freq=freq,
             psd=psd,
-        ).array()
+        ).array() / np.sqrt(2)
 
     # Using C implementation (mappraiser)
     if not py:
@@ -270,7 +270,7 @@ def sim_noise(
         fftlen *= 2
     npsd = fftlen // 2 + 1
 
-    norm = fsamp * float(npsd - 1)
+    norm = fsamp * float(npsd - 1) / 2
 
     if autocorr is not None:
         # Compute the PSD
