@@ -12,67 +12,62 @@ plt.rcParams.update({'figure.figsize': (6, 4), 'figure.dpi': 150, 'savefig.bbox'
 
 
 # parameters
-realization = 657
-telescope = 0
-component = 0
-sindx = 0
-detindx = 0
-sample_rate = 37
-samples = 100000
+REALIZATION = 657
+TELESCOPE = 0
+COMPONENT = 0
+SESSION_INDEX = 0
+DETECTOR_INDEX = 0
+FSAMP = 37
+SAMPLES = 2**17
+LAGMAX = 2**15
+LGAP = LAGMAX // 8
+STEP = LAGMAX // 2
+OFFSET = LAGMAX // 16
+W0_VALUES = [LAGMAX // n for n in (16, 4, 2, 1)]
 
-# log(sigma) = -4.82, alpha = -0.87, fknee = 0.05, fmin = 8.84e-04
-sigma2 = 10**-4.82
-alpha = 2.87
-fknee = 1.05
-fmin = 8.84e-4
 
-# form the input PSD model
-freq = np.fft.rfftfreq(samples, 1 / sample_rate)
+freq = np.fft.rfftfreq(SAMPLES, 1 / FSAMP)
+freq1 = freq[1:]  # Without zero frequency
 npsd = len(freq)
-psd_model = utils.psd_model(freq, sigma2, alpha, fknee, fmin)
 
+# PSD model
+# log(sigma) = -4.82, alpha = -0.87, fknee = 0.05, fmin = 8.84e-04
+sigma = 1.0
+alpha_atm = 3.0
+# alpha_ins = 1.0
+fknee_atm = 1.0
+# fknee_ins = 0.05
+fmin = 1e-3
+
+psd = utils.psd_model(freq, sigma, alpha_atm, fknee_atm, fmin)
 tod = utils.sim_noise(
-    samples=samples,
-    realization=realization,
-    detindx=detindx,
-    sindx=sindx,
-    telescope=telescope,
-    fsamp=sample_rate,
+    samples=SAMPLES,
+    realization=REALIZATION,
+    detindx=DETECTOR_INDEX,
+    sindx=SESSION_INDEX,
+    telescope=TELESCOPE,
+    fsamp=FSAMP,
     use_toast=True,
     freq=freq,
-    psd=psd_model,
+    psd=psd,
 )
 
-fit_params_tod = utils.fit_psd_to_tod(tod, sample_rate)
+fit_params_tod = utils.fit_psd_to_tod(tod, FSAMP)
 
 psd_fit = utils.psd_model(freq, *fit_params_tod)
 ipsd_fit = np.reciprocal(psd_fit)
 
-# plt.figure()
-# plt.title('Power spectral densities')
-# plt.loglog(freq[1:], psd_model[1:], c='k', label='model')
-# plt.loglog(freq[1:], psd_fit[1:], label='fit')
-# plt.xlabel(r'frequency [$Hz$]')
-# plt.ylabel(r'PSD $[K^2 / Hz]$')
-# plt.grid(True)
-# plt.legend()
-# plt.show()
 
-corr_length = 2**16
-
-lgap = 2**11
-step = samples // 10
-
-print(f'Introducing gaps (length {lgap} every {step} samples)')
-
-pix = np.ones(samples, dtype=np.int32)
-valid = np.ones(samples, dtype=np.uint8)
-for i in range(0, samples, step):
-    slc = slice(i, i + lgap)
+pix = np.ones(SAMPLES, dtype=np.int32)
+valid = np.ones(SAMPLES, dtype=np.uint8)
+for i in range(OFFSET, SAMPLES, STEP):
+    slc = slice(i, i + LGAP)
     pix[slc] = -1
     valid[slc] = 0
 
-print(f'Valid samples: {np.sum(valid)}/{samples} = {100 * np.sum(valid) / samples} %')
+print(f'Gaps of length {LGAP} every {STEP} samples starting at {OFFSET}')
+print(f'Valid samples: {np.sum(valid) / SAMPLES:%}')
+print(f'{W0_VALUES=}')
 
 
 def plot_gap_edges(valid, ax, ls='dotted', c='k'):
@@ -86,36 +81,33 @@ def plot_gap_edges(valid, ax, ls='dotted', c='k'):
             ax.axvline(x=0.5 + i, ls=ls, c=c)
 
 
-fs_over_lambd = sample_rate / corr_length
-w0_values = [corr_length // n for n in (32, 16, 8, 4, 2)]
-print('w0 values = ', w0_values)
+fs_over_lambd = FSAMP / LAGMAX
 
 baselines = {}
 tods_rm = {}
-for w0 in w0_values:
+for w0 in W0_VALUES:
     baselines[w0], tods_rm[w0] = utils.baseline(np.array(tod), valid, w0, cp=True)
 
 # plot baselines + TODs after removal
 fig, axs = plt.subplots(2, 1, figsize=(10, 5), sharex=True, sharey=True, layout='constrained')
+plot_gap_edges(valid, axs[0])
+plot_gap_edges(valid, axs[1])
 
 # First subplot - baselines comparison
-# axs[0].set_title('Comparison of baselines with different window sizes')
 axs[0].plot(tod, c='k', label='TOD')
-plot_gap_edges(valid, axs[0])
-for w0 in w0_values:
+for w0 in W0_VALUES:
     axs[0].plot(baselines[w0], ls='--', label=f'$\\Delta w={2 * w0 + 1}$')
 
 # Second subplot - TODs after baseline removal
-# axs[1].set_title('TODs after baseline removal')
-for w0 in w0_values:
-    axs[1].plot(tods_rm[w0], label=f'$\\Delta w={2 * w0 + 1}$')
-plot_gap_edges(valid, axs[1])
+for w0 in W0_VALUES:
+    axs[1].plot(tods_rm[w0])
 
 # Get handles and labels from the first subplot and place legend above the figure
 handles, labels = axs[0].get_legend_handles_labels()
 fig.legend(handles, labels, loc='outside upper center', ncols=len(handles))
 
 fig.savefig('plots/baselines_before_after.svg')
+exit()
 
 
 # _________________________________________________________________________________________________
@@ -124,7 +116,7 @@ fig, ax = plt.subplots()
 
 fit_params_tod, f_tod, psd_tod = utils.fit_psd_to_tod(
     tod,
-    sample_rate,
+    FSAMP,
     welch=False,
     return_periodogram=True,
 )
@@ -137,8 +129,8 @@ ax.loglog(f_tod[1:], utils.psd_model(f_tod[1:], *fit_params_tod), 'k--', label='
 # ax.set_title('Power spectra of different baselines')
 # cm = sns.color_palette('Set1')
 
-for i, w0 in enumerate(w0_values):
-    f, psd = welch(baselines[w0], fs=sample_rate, nperseg=corr_length)
+for i, w0 in enumerate(W0_VALUES):
+    f, psd = welch(baselines[w0], fs=FSAMP, nperseg=LAGMAX)
     # ax.loglog(f[1:], utils.psd_model(f[1:], *fit_params_tod), c=cm(i), label=f"$\Delta w={2*w0+1}$")
     # ax.loglog(f[1:], psd[1:], c=cm(i), alpha=0.25)
     # ax.loglog(
@@ -182,7 +174,7 @@ def plot_baseline_removal(w0, ax=None, plot_bline_fit=False, plot_psd_eff=False)
     # TOD after removal
     fit_params_removal, f, psd = utils.fit_psd_to_tod(
         new_tod,
-        sample_rate,
+        FSAMP,
         welch=False,
         return_periodogram=True,
     )
@@ -191,12 +183,12 @@ def plot_baseline_removal(w0, ax=None, plot_bline_fit=False, plot_psd_eff=False)
     ax.loglog(f[1:], psd[1:], c='b', alpha=0.6)
 
     # ax.axvline(x=sample_rate/(2*w0+1), c='r', label="$\Delta w/f_s$")
-    ax.axvline(x=sample_rate * cutoff_dma(w0), c='r', label='-3 dB cutoff')
+    ax.axvline(x=FSAMP * cutoff_dma(w0), c='r', label='-3 dB cutoff')
 
     # Baseline
     fit_params_baseline, f, psd = utils.fit_psd_to_tod(
         bline,
-        sample_rate,
+        FSAMP,
         welch=False,
         return_periodogram=True,
     )
@@ -224,7 +216,7 @@ def plot_baseline_removal(w0, ax=None, plot_bline_fit=False, plot_psd_eff=False)
     if plot_psd_eff:
         matching_lambda = 2 * w0
         itt_model = utils.psd_to_ntt(ipsd_fit, matching_lambda)
-        ipsd_eff = utils.autocorr_to_psd(itt_model, samples)
+        ipsd_eff = utils.autocorr_to_psd(itt_model, SAMPLES)
         ax.loglog(
             freq[1:], 1 / ipsd_eff[1:], c='g', label=f'effective PSD $\\lambda={matching_lambda}$'
         )
@@ -266,8 +258,8 @@ fig.savefig('plots/window_size_vs_lambda.svg')
 
 fig, axs = plt.subplots(1, 2, figsize=(8, 4), sharex=True, sharey=True, layout='constrained')
 # fig.suptitle('Before/after baseline removal')
-plot_baseline_removal(w0_values[0], ax=axs[0], plot_psd_eff=True)
-plot_baseline_removal(w0_values[2], ax=axs[1], plot_psd_eff=True)
+plot_baseline_removal(W0_VALUES[0], ax=axs[0], plot_psd_eff=True)
+plot_baseline_removal(W0_VALUES[2], ax=axs[1], plot_psd_eff=True)
 for ax in axs:
     ax.set_ylim(bottom=1e-11)
 fig.legend(
