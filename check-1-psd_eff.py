@@ -30,7 +30,7 @@ alpha_atm = 3.0
 alpha_ins = 1.0
 fknee_atm = 1.0
 fknee_ins = 0.05
-fmin = 1e-5
+fmin = 1e-3
 
 psd = {
     'ins': utils.psd_model(freq, sigma, alpha_ins, fknee_ins, fmin),
