@@ -3,7 +3,6 @@ import numpy.typing as npt
 import scipy.signal
 from scipy.optimize import curve_fit
 from scipy.signal import get_window
-from toast import rng
 from toast.ops.sim_tod_noise import sim_noise_timestream
 
 import mappraiser.wrapper as mappraiser
@@ -205,7 +204,7 @@ def sim_noise(
     sindx=0,
     telescope=0,
     fsamp=1.0,
-    py=False,
+    # py=False,
     autocorr=None,
     freq=None,
     psd=None,
@@ -254,88 +253,87 @@ def sim_noise(
         ).array() / np.sqrt(2)
 
     # Using C implementation (mappraiser)
-    if not py:
-        if autocorr is None:
-            raise ValueError('autocorr must be provided if using C routine')
-        if verbose:
-            print('sim_noise: use C routine')
-        tdata = np.zeros(samples)
-        mappraiser.sim_noise_tod(
-            samples,
-            len(autocorr),
-            autocorr,
-            tdata,
-            realization,
-            detindx,
-            sindx,
-            telescope,
-            fsamp,
-        )
-        return tdata
-
-    # Using Python implementation (similar to TOAST but no resampling of PSD is done)
+    if autocorr is None:
+        raise ValueError('autocorr must be provided if using C routine')
     if verbose:
-        print('sim_noise: use Python code')
-    fftlen = 2
-    while fftlen <= samples:
-        fftlen *= 2
-    npsd = fftlen // 2 + 1
-
-    norm = fsamp * float(npsd - 1) / 2
-
-    if autocorr is not None:
-        # Compute the PSD
-        lag = len(autocorr)
-        circ_t = np.pad(autocorr, (0, fftlen - lag), 'constant')
-        if lag > 1:
-            circ_t[-lag + 1 :] = np.flip(autocorr[1:], 0)
-        psd_final = np.abs(np.fft.rfft(circ_t, n=fftlen))
-    else:
-        # User wants to work directly with the PSD
-        # We don't do any resampling, input PSD must be of the right size
-        if psd is None:
-            raise ValueError('psd must be provided if not using autocorr')
-        # assert len(psd) == npsd
-        psd_final = np.copy(psd)
-
-    psd_final[0] = 0
-    scale = np.sqrt(psd_final * norm)
-
-    # gaussian Re/Im randoms, packed into a complex valued array
-
-    key1 = int(realization) * int(4294967296) + int(telescope) * int(65536)
-    key2 = int(sindx) * int(4294967296) + int(detindx)
-    counter1 = 0
-    counter2 = 0
-
-    rngdata = rng.random(
-        fftlen,
-        sampler='gaussian',
-        key=(key1, key2),
-        counter=(counter1, counter2),
-    ).array()
-
-    fdata = np.zeros(npsd, dtype=np.complex128)
-
-    # Set the DC and Nyquist frequency imaginary part to zero
-    fdata[0] = rngdata[0] + 0.0j
-    fdata[-1] = rngdata[npsd - 1] + 0.0j
-
-    # Repack the other values.
-    fdata[1:-1] = rngdata[1 : npsd - 1] + 1j * rngdata[-1 : npsd - 1 : -1]
-
-    # scale by PSD
-    fdata *= scale
-
-    # inverse FFT
-    tempdata = np.fft.irfft(fdata)
-
-    # subtract the DC level- for just the samples that we are returning
-    offset = (fftlen - samples) // 2
-
-    DC = np.mean(tempdata[offset : offset + samples])
-    tdata = tempdata[offset : offset + samples] - DC
+        print('sim_noise: use C routine')
+    tdata = np.zeros(samples)
+    mappraiser.sim_noise_tod(
+        samples,
+        len(autocorr),
+        autocorr,
+        tdata,
+        realization,
+        detindx,
+        sindx,
+        telescope,
+        fsamp,
+    )
     return tdata
+
+    # # Using Python implementation (similar to TOAST but no resampling of PSD is done)
+    # if verbose:
+    #     print('sim_noise: use Python code')
+    # fftlen = 2
+    # while fftlen <= samples:
+    #     fftlen *= 2
+    # npsd = fftlen // 2 + 1
+
+    # norm = fsamp * float(npsd - 1) / 2
+
+    # if autocorr is not None:
+    #     # Compute the PSD
+    #     lag = len(autocorr)
+    #     circ_t = np.pad(autocorr, (0, fftlen - lag), 'constant')
+    #     if lag > 1:
+    #         circ_t[-lag + 1 :] = np.flip(autocorr[1:], 0)
+    #     psd_final = np.abs(np.fft.rfft(circ_t, n=fftlen))
+    # else:
+    #     # User wants to work directly with the PSD
+    #     # We don't do any resampling, input PSD must be of the right size
+    #     if psd is None:
+    #         raise ValueError('psd must be provided if not using autocorr')
+    #     # assert len(psd) == npsd
+    #     psd_final = np.copy(psd)
+
+    # psd_final[0] = 0
+    # scale = np.sqrt(psd_final * norm)
+
+    # # gaussian Re/Im randoms, packed into a complex valued array
+
+    # key1 = int(realization) * int(4294967296) + int(telescope) * int(65536)
+    # key2 = int(sindx) * int(4294967296) + int(detindx)
+    # counter1 = 0
+    # counter2 = 0
+
+    # rngdata = rng.random(
+    #     fftlen,
+    #     sampler='gaussian',
+    #     key=(key1, key2),
+    #     counter=(counter1, counter2),
+    # ).array()
+
+    # fdata = np.zeros(npsd, dtype=np.complex128)
+
+    # # Set the DC and Nyquist frequency imaginary part to zero
+    # fdata[0] = rngdata[0] + 0.0j
+    # fdata[-1] = rngdata[npsd - 1] + 0.0j
+
+    # # Repack the other values.
+    # fdata[1:-1] = rngdata[1 : npsd - 1] + 1j * rngdata[-1 : npsd - 1 : -1]
+
+    # # scale by PSD
+    # fdata *= scale
+
+    # # inverse FFT
+    # tempdata = np.fft.irfft(fdata)
+
+    # # subtract the DC level- for just the samples that we are returning
+    # offset = (fftlen - samples) // 2
+
+    # DC = np.mean(tempdata[offset : offset + samples])
+    # tdata = tempdata[offset : offset + samples] - DC
+    # return tdata
 
 
 def baseline(tod, valid, w0, rm=False, cp=False):

@@ -11,212 +11,161 @@ sns.set_theme(context='paper', style='ticks')
 plt.rcParams.update({'figure.figsize': (6, 4), 'figure.dpi': 150, 'savefig.bbox': 'tight'})
 
 # parameters
-realization = 657
-telescope = 0
-component = 0
-sindx = 0
-detindx = 0
-fsamp = 37
-samples = 100000
+REALIZATION = 657
+TELESCOPE = 0
+COMPONENT = 0
+SESSION_INDEX = 0
+DETECTOR_INDEX = 0
+FSAMP = 37
+SAMPLES = 2**17
+LAGMAX = 2**15
 
+freq = np.fft.rfftfreq(SAMPLES, 1 / FSAMP)
+freq1 = freq[1:]  # Without zero frequency
+npsd = len(freq) - 1
+
+# PSD model
 # log(sigma) = -4.82, alpha = -0.87, fknee = 0.05, fmin = 8.84e-04
-sigma2 = 10**-4.82
-alpha = 2.87
-fknee = 1.05
-fmin = 8.84e-4
+sigma = 1.0
+alpha_atm = 3.0
+alpha_ins = 1.0
+fknee_atm = 1.0
+fknee_ins = 0.05
+fmin = 1e-3
 
-# Generate timestream
-freq = np.fft.rfftfreq(samples, 1 / fsamp)
-psd = utils.psd_model(freq, sigma2, alpha, fknee, fmin)
-psd[0] = 0
-
-fftlen = utils.next_fast_fft_size(samples)
-print(f'{fftlen=}')
-
-freq_in = np.fft.rfftfreq(fftlen, 1 / fsamp)
-psd_in = utils.psd_model(freq_in, sigma2, alpha, fknee, fmin)
-psd_in[0] = 0
-
-# correlation length
-lcorr = 2**16
+psd = {
+    'ins': utils.psd_model(freq, sigma, alpha_ins, fknee_ins, fmin),
+    'atm': utils.psd_model(freq, sigma, alpha_atm, fknee_atm, fmin),
+}
+psd1 = {k: v[1:] for k, v in psd.items()}
+ipsd = {k: 1 / v for k, v in psd.items()}
 
 # Measure PSD of generated timestreams
-n_real = 100
+NREAL = 25
 
 tods = {
-    'py_ntt': np.zeros((n_real, samples)),
-    'c_ntt': np.zeros((n_real, samples)),
-    'toast_psd': np.zeros((n_real, samples)),
-    'py_psd': np.zeros((n_real, samples)),
+    'ins': {
+        # 'py_ntt': np.zeros((NREAL, SAMPLES)),
+        'c_ntt': np.zeros((NREAL, SAMPLES)),
+        'toast_psd': np.zeros((NREAL, SAMPLES)),
+        # 'py_psd': np.zeros((NREAL, SAMPLES)),
+    },
+    'atm': {
+        # 'py_ntt': np.zeros((NREAL, SAMPLES)),
+        'c_ntt': np.zeros((NREAL, SAMPLES)),
+        'toast_psd': np.zeros((NREAL, SAMPLES)),
+        # 'py_psd': np.zeros((NREAL, SAMPLES)),
+    },
 }
+for model in ['ins', 'atm']:
+    for i_ax in trange(NREAL):
+        params = {
+            'samples': SAMPLES,
+            'realization': REALIZATION + i_ax * 6513754,
+            'detindx': DETECTOR_INDEX,
+            'sindx': SESSION_INDEX,
+            'telescope': TELESCOPE,
+            'fsamp': FSAMP,
+            # 'verbose': i == 0,
+        }
+        # tods[model]['py_ntt'][i] = utils.sim_noise(
+        #     py=True,
+        #     autocorr=utils.psd_to_ntt(psd[model], LAGMAX),
+        #     **params,
+        # )
+        tods[model]['c_ntt'][i_ax] = utils.sim_noise(
+            autocorr=utils.psd_to_ntt(psd[model], LAGMAX),
+            **params,
+        )
+        tods[model]['toast_psd'][i_ax] = utils.sim_noise(
+            use_toast=True,
+            freq=freq,
+            psd=psd[model],
+            **params,
+        )
+        # tods[model]['py_psd'][i] = utils.sim_noise(
+        #     py=True,
+        #     psd=psd[model],
+        #     **params,
+        # )
 
-for i in trange(n_real):
-    params = {
-        'samples': samples,
-        'realization': realization + i * 6513754,
-        'detindx': detindx,
-        'sindx': sindx,
-        'telescope': telescope,
-        'fsamp': fsamp,
-        # 'verbose': i == 0,
-    }
-    tods['py_ntt'][i] = utils.sim_noise(
-        py=True,
-        autocorr=utils.psd_to_ntt(psd, lcorr),
-        **params,
-    )
-    tods['c_ntt'][i] = utils.sim_noise(
-        autocorr=utils.psd_to_ntt(psd, lcorr),
-        **params,
-    )
-    tods['toast_psd'][i] = utils.sim_noise(
-        use_toast=True,
-        freq=freq,
-        psd=psd,
-        **params,
-    )
-    tods['py_psd'][i] = utils.sim_noise(
-        py=True,
-        psd=psd_in,
-        **params,
-    )
+fig, axs = plt.subplots(2, 1, figsize=(10, 6), layout='constrained', sharex=True)
 
-plt.figure(figsize=(12, 8))
+# First row for 'ins' timestreams
+# (line1,) = axs[0].plot(tods['ins']['py_ntt'][0])
+(line2,) = axs[0].plot(tods['ins']['c_ntt'][0])
+(line3,) = axs[0].plot(tods['ins']['toast_psd'][0])
+# (line4,) = axs[0].plot(tods['ins']['py_psd'][0])
+axs[0].set_ylabel('Amplitude')
 
-# First subplot for timestreams
-plt.subplot(2, 1, 1)
-plt.title('Generated timestreams')
-plt.plot(tods['py_ntt'][0], label='Py - using Ntt')
-plt.plot(tods['c_ntt'][0], label='C - using Ntt')
-plt.plot(tods['toast_psd'][0], label='TOAST - using PSD')
-plt.plot(tods['py_psd'][0], label='Py - using PSD')
-plt.legend(loc='upper right')
+# Second row for 'atm' timestreams
+# axs[1].plot(tods['atm']['py_ntt'][0])
+axs[1].plot(tods['atm']['c_ntt'][0])
+axs[1].plot(tods['atm']['toast_psd'][0])
+# axs[1].plot(tods['atm']['py_psd'][0])
+axs[1].set_xlabel('Sample')
+axs[1].set_ylabel('Amplitude')
 
-# Second subplot for measured PSDs
-plt.subplot(2, 1, 2)
-plt.title('Measured PSDs')
-
-# Fit parameters for py_ntt and plot
-py_ntt_params = utils.fit_psd_to_tod(tods['py_ntt'][0], fsamp)
-plt.loglog(
-    freq[1:],
-    utils.psd_model(freq[1:], *py_ntt_params),
-    label='Py - using Ntt',
+# Add figure-level legend instead of per-subplot legends
+fig.legend(
+    [line2, line3],
+    ['TOAST (uses PSD)', 'MAPPRAISER (uses autocorrelation)'],
+    loc='outside upper center',
+    ncol=2,
 )
-print(
-    f'Py-Ntt fitted params: sigma2={py_ntt_params[0]:.4e}, alpha={py_ntt_params[1]:.4f}, fknee={py_ntt_params[2]:.4f}, fmin={py_ntt_params[3]:.4e}'
-)
+fig.savefig('plots/generated_tods.svg')
 
-# Fit parameters for c_ntt and plot
-c_ntt_params = utils.fit_psd_to_tod(tods['c_ntt'][0], fsamp)
-plt.loglog(
-    freq[1:],
-    utils.psd_model(freq[1:], *c_ntt_params),
-    label='C - using Ntt',
-)
-print(
-    f'C-Ntt fitted params: sigma2={c_ntt_params[0]:.4e}, alpha={c_ntt_params[1]:.4f}, fknee={c_ntt_params[2]:.4f}, fmin={c_ntt_params[3]:.4e}'
-)
-
-# Fit parameters for toast_psd and plot
-toast_psd_params = utils.fit_psd_to_tod(tods['toast_psd'][0], fsamp)
-plt.loglog(
-    freq[1:],
-    utils.psd_model(freq[1:], *toast_psd_params),
-    label='TOAST - using PSD',
-)
-print(
-    f'TOAST-PSD fitted params: sigma2={toast_psd_params[0]:.4e}, alpha={toast_psd_params[1]:.4f}, fknee={toast_psd_params[2]:.4f}, fmin={toast_psd_params[3]:.4e}'
-)
-
-# Fit parameters for py_psd and plot
-py_psd_params = utils.fit_psd_to_tod(tods['py_psd'][0], fsamp)
-plt.loglog(
-    freq[1:],
-    utils.psd_model(freq[1:], *py_psd_params),
-    label='Py - using PSD',
-)
-print(
-    f'Py-PSD fitted params: sigma2={py_psd_params[0]:.4e}, alpha={py_psd_params[1]:.4f}, fknee={py_psd_params[2]:.4f}, fmin={py_psd_params[3]:.4e}'
-)
-
-# Plot the model
-plt.loglog(freq[1:], psd[1:], 'k--', label='Model')
-print(f'Original model: sigma2={sigma2:.4e}, alpha={alpha:.4f}, fknee={fknee:.4f}, fmin={fmin:.4e}')
-
-plt.xlabel('Frequency [Hz]')
-plt.ylabel('PSD')
-plt.legend(loc='upper right')
-
-plt.tight_layout()
-plt.savefig('plots/generated_tods.png')
 
 # Initialize dictionaries for the PSDs
-psds_simple = {key: np.empty((n_real, freq.size)) for key in tods.keys()}
-psds_hann = {key: np.empty((n_real, freq.size)) for key in tods.keys()}
+psd_realizations = {
+    model: {method: np.empty((NREAL, freq.size)) for method in tods[model].keys()}
+    for model in tods.keys()
+}
 
-for i in trange(n_real):
-    for key in tods.keys():
-        # Simple periodogram PSDs with Hann window
-        fit_params_simple = utils.fit_psd_to_tod(tods[key][i], fsamp, welch=False)
-        psds_simple[key][i] = utils.psd_model(freq, *fit_params_simple)
+fig, axs = plt.subplots(1, 2, figsize=(8, 4), layout='constrained', sharey=True)
+axs[0].set_title('Instrumental')
+axs[1].set_title('Atmospheric')
 
-        # Welch PSDs
-        fit_params_welch = utils.fit_psd_to_tod(tods[key][i], fsamp, welch=True)
-        psds_hann[key][i] = utils.psd_model(freq, *fit_params_welch)
-
-fig, axs = plt.subplots(1, 2, figsize=(10, 4))
-# fig.suptitle(f'PSD average fits (n={n_real}) compared to model')
-axs[0].set_title('Simple periodogram')
-axs[1].set_title('Welch method')
+axs[0].set_ylabel('Ratio to model')
+for ax in axs:
+    ax.set(xlabel='Frequency [Hz]')
+    ax.grid(True)
 
 # Create common legend handles and labels
 legend_handles = []
-legend_labels = []
 
-# Add model line to both axes and collect for legend
-axs[0].axhline(y=1, c='k', ls='--')
-model_line = axs[1].axhline(y=1, c='k', ls='--')
-legend_handles.append(model_line)
-legend_labels.append('Model')
+cm = sns.color_palette(n_colors=2)
+for i_ax, (model, psd_real) in enumerate(psd_realizations.items()):
+    ax = axs[i_ax]
 
-for ax in axs:
-    ax.set(xlabel='Frequency [Hz]', ylabel='Ratio to model')
+    # Add model line to both axes and collect for legend
+    model_line = ax.axhline(y=1, c='k', ls='--')
+    if i_ax == 0:
+        legend_handles.append(model_line)
 
-cm = sns.color_palette('Set1')
-for i, (key, label) in enumerate(
-    zip(
-        tods.keys(),
-        ['Py - using Ntt', 'C - using Ntt', 'TOAST - using PSD', 'Py - using PSD'],
-    )
-):
-    avg_s = np.average(psds_simple[key], axis=0)
-    dev_s = np.std(psds_simple[key], axis=0)
-    avg_h = np.average(psds_hann[key], axis=0)
-    dev_h = np.std(psds_hann[key], axis=0)
+    for i_method, method in enumerate(['c_ntt', 'toast_psd']):
+        for j in trange(NREAL):
+            fit_params = utils.fit_psd_to_tod(tods[model][method][j], FSAMP, welch=True)
+            psd_real[method][j] = utils.psd_model(freq, *fit_params)
 
-    # Plot in first axis
-    line_s, = axs[0].semilogx(freq[1:], avg_s[1:] / psd[1:], c=cm[i])
-    axs[0].semilogx(freq[1:], (avg_s - dev_s)[1:] / psd[1:], c=cm[i], ls=':')
-    axs[0].semilogx(freq[1:], (avg_s + dev_s)[1:] / psd[1:], c=cm[i], ls=':')
+        avg_psd1 = np.average(psd_real[method], axis=0)[1:]
+        dev_psd1 = np.std(psd_real[method], axis=0)[1:]
 
-    # Plot in second axis
-    axs[1].semilogx(freq[1:], avg_h[1:] / psd[1:], c=cm[i])
-    axs[1].semilogx(freq[1:], (avg_h - dev_h)[1:] / psd[1:], c=cm[i], ls=':')
-    axs[1].semilogx(freq[1:], (avg_h + dev_h)[1:] / psd[1:], c=cm[i], ls=':')
+        # Plot in first axis
+        (line,) = ax.semilogx(freq1, avg_psd1 / psd1[model], color=cm[i_method])
+        ax.semilogx(freq1, (avg_psd1 - dev_psd1) / psd1[model], ls=':', color=cm[i_method])
+        ax.semilogx(freq1, (avg_psd1 + dev_psd1) / psd1[model], ls=':', color=cm[i_method])
 
-    # Only add to legend once
-    legend_handles.append(line_s)
-    legend_labels.append(label)
+        # Only add to legend once
+        if i_ax == 0:
+            legend_handles.append(line)
 
 # Create a single legend above the figure
 fig.legend(
     legend_handles,
-    legend_labels,
+    ['Model', 'TOAST', 'MAPPRAISER'],
     loc='outside upper center',
-    ncol=5,
+    ncol=3,
 )
 
-# fig.tight_layout()
-# fig.subplots_adjust(top=0.85)  # Make room for the legend above
 fig.savefig('plots/psd_fits_vs_model.svg')
