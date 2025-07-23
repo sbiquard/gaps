@@ -183,6 +183,17 @@ def autocorr_to_psd(autocorr, fft_size: int):
     return psd
 
 
+def cutoff(freq, psd, lag, fftlen: int, level: float = -3):
+    """
+    Find the approximate frequency at which the effective PSD deviates
+    from the model at the given level (in dB).
+    """
+    inv_ntt = psd_to_ntt(1 / psd, lag)
+    psd_eff = 1 / autocorr_to_psd(inv_ntt, fftlen)
+    power_ratio_dB = 10 * np.log10(psd_eff[1:] / psd[1:])
+    return freq[np.argmin(np.abs(power_ratio_dB - level)) + 1]
+
+
 # ____________________________________________________________
 # TOD manipulation
 

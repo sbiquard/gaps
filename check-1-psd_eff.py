@@ -11,119 +11,128 @@ plt.rcParams.update({'figure.figsize': (6, 4), 'figure.dpi': 150, 'savefig.bbox'
 
 
 # Simulation parameters
-realization = 657
-telescope = 0
-component = 0
-sindx = 0
-detindx = 0
-fsamp = 37
-samples = 100000
+REALIZATION = 657
+TELESCOPE = 0
+COMPONENT = 0
+SESSION_INDEX = 0
+DETECTOR_INDEX = 0
+FSAMP = 37
+SAMPLES = 2**17
 
-freq = np.fft.rfftfreq(samples, 1 / fsamp)
+freq = np.fft.rfftfreq(SAMPLES, 1 / FSAMP)
+freq1 = freq[1:]  # Without zero frequency
 npsd = len(freq) - 1
 
 # PSD model
 # log(sigma) = -4.82, alpha = -0.87, fknee = 0.05, fmin = 8.84e-04
-sigma2 = 10**-4.82
-alpha = 2.87
-fknee = 1.05
-fmin = 8.84e-4
+sigma = 1.0
+alpha_atm = 3.0
+alpha_ins = 1.0
+fknee_atm = 1.0
+fknee_ins = 0.05
+fmin = 1e-5
 
-# PSD model / effective
-psd = utils.psd_model(freq, sigma2, alpha, fknee, fmin)
-ipsd = 1 / psd
-# psd[0] = 0
+psd = {
+    'ins': utils.psd_model(freq, sigma, alpha_ins, fknee_ins, fmin),
+    'atm': utils.psd_model(freq, sigma, alpha_atm, fknee_atm, fmin),
+}
+psd1 = {k: v[1:] for k, v in psd.items()}
+ipsd = {k: 1 / v for k, v in psd.items()}
+
+# Plot comparing the two PSDs
+fig, ax = plt.subplots()
+ax.loglog(freq1, psd1['ins'], label='Instrumental')
+ax.loglog(freq1, psd1['atm'], label='Atmospheric')
+ax.set_xlabel('Frequency [Hz]')
+ax.set_ylabel('PSD [Hz$^{-1}$]')
+ax.grid(True)
+ax.legend()
+fig.savefig('plots/psd_comparison.svg')
 
 
-# cutoff using inv_tt
-def cutoff(lambd, level: float = -3):
-    """
-    Find the approximate frequency at which the effective PSD has deviated
-    from the model at the given level (in dB).
-    """
-    itt_model = utils.psd_to_ntt(ipsd, lambd)
-    ipsd_eff = utils.autocorr_to_psd(itt_model, samples)
-    power_ratio_dB = 10 * np.log10(np.reciprocal(ipsd_eff[1:]) / psd[1:])
-    cutoff = freq[np.argmin(np.abs(power_ratio_dB - level)) + 1]
-    return cutoff
+for model in ['ins', 'atm']:
+    fig, axs = plt.subplots(2, 3, figsize=(10, 6), sharex=True, sharey='row', layout='constrained')
 
+    axs[0, 0].set_title('Using direct autocorrelation')
+    axs[0, 1].set_title('Using inverse autocorrelation')
+    axs[0, 2].set_title('Using modified autocorrelation')
 
-fig, axs = plt.subplots(3, 2, figsize=(10, 12), sharex=True, sharey='col')
+    # Create empty lists to store legend handles and labels
+    legend_elements = []
 
-fig.suptitle(f'PSD and autocorrelation (TOD size = {samples})')
-axs[0, 0].set_title('PSD model vs. effective')
-axs[1, 0].set_title('Using inverse autocorrelation')
-axs[2, 0].set_title('Using modified `tt`')
+    # Add horizontal lines for reference
+    for ax in axs[1, :]:
+        model_line = ax.axhline(y=0, c='dimgrey')
+        model_db_line = ax.axhline(y=-3, ls=':', c='dimgrey')
 
-for ax in axs[:, 1]:
-    # ax.set_title("Relative difference")
-    ax.set_title('Attenuation / Amplification')
-    ax.set_ylabel('dB')
-    ax.axhline(y=0, c='dimgrey', label='model')
-    ax.axhline(y=-3, ls=':', c='dimgrey', label='model -3 dB')
+    # Add these to legend elements
+    legend_elements.append((model_line, 'model'))
+    legend_elements.append((model_db_line, 'model -3 dB'))
 
-# Put labels on axes
-for ax in axs[-1, :]:
-    ax.set_xlabel(r'Frequency [$Hz$]')
+    # Put labels on axes
+    for ax in axs[1, :]:
+        ax.set_xlabel(r'Frequency [$Hz$]')
 
-for ax in axs[:, 0]:
-    ax.set_ylabel(r'PSD [$K^2 / Hz$]')
+    axs[0, 0].set_ylabel(r'PSD [$Hz^{-1}$]')
+    axs[1, 0].set_ylabel('dB')
 
-# Plot references
-for ax in axs[:, 0]:
-    ax.loglog(freq[1:], psd[1:], c='k', label='model')
+    # Plot references
+    for ax in axs[0, :]:
+        ref_line = ax.loglog(freq1, psd1[model], c='k')[0]
 
-# Plots curves for different lambda values
-lambdas = [4096, 8192, 16384, 32768]
-cm = sns.color_palette('Set1', n_colors=len(lambdas))
-for i, lambd in enumerate(lambdas):
-    # PSD eff from `tt`
-    tt_model = utils.psd_to_ntt(psd, lambd)
-    psd_eff = utils.autocorr_to_psd(tt_model, samples)
+    legend_elements.append((ref_line, 'model'))
 
-    axs[0, 0].loglog(freq[1:], psd_eff[1:], c=cm[i], label=f'$\\lambda={lambd}$')
-    axs[0, 1].semilogx(
-        freq[1:],
-        # (psd_eff - psd)[1:] / psd[1:],
-        10 * np.log10(psd_eff[1:] / psd[1:]),
-        c=cm[i],
-        label=f'$\\lambda={lambd}$',
-    )
+    # Plots curves for different lambda values
+    LAGS = [4096, 8192, 16384, 32768]
+    cm = sns.color_palette('Set1', n_colors=len(LAGS))
+    for i, lag in enumerate(LAGS):
+        # PSD eff from `tt`
+        ntt = utils.psd_to_ntt(psd[model], lag)
+        psd1_eff = utils.autocorr_to_psd(ntt, SAMPLES)[1:]
 
-    # PSD eff from `inv_tt`
-    itt_model = utils.psd_to_ntt(ipsd, lambd)
-    ipsd_eff = utils.autocorr_to_psd(itt_model, samples)
+        line1 = axs[0, 0].loglog(freq1, psd1_eff, c=cm[i])[0]
+        axs[1, 0].semilogx(
+            freq1,
+            10 * np.log10(psd1_eff / psd1[model]),
+            c=cm[i],
+        )
 
-    axs[1, 0].loglog(freq[1:], 1 / ipsd_eff[1:], c=cm[i], label=f'$\\lambda={lambd}$')
-    axs[1, 1].semilogx(
-        freq[1:],
-        # (1 / ipsd_eff - psd)[1:] / psd[1:],
-        10 * np.log10(np.reciprocal(ipsd_eff[1:]) / psd[1:]),
-        c=cm[i],
-        label=f'$\\lambda={lambd}$',
-    )
-    axs[1, 1].axvline(x=cutoff(lambd), c=cm[i], ls=':')
+        # PSD eff from `inv_tt`
+        invntt = utils.psd_to_ntt(ipsd[model], lag)
+        ipsd1_eff = utils.autocorr_to_psd(invntt, SAMPLES)[1:]
 
-    # PSD eff as `ifft(1/fft(inv_tt))`
-    tt_modified = utils.psd_to_ntt(np.reciprocal(ipsd_eff), lambd)
-    psd_eff_mod = utils.autocorr_to_psd(tt_modified, samples)
+        axs[0, 1].loglog(freq1, 1 / ipsd1_eff, c=cm[i])
+        axs[1, 1].semilogx(
+            freq1,
+            10 * np.log10(1 / ipsd1_eff / psd1[model]),
+            c=cm[i],
+        )
+        # axs[1, 1].axvline(x=utils.cutoff(freq, psd[model], lag, SAMPLES), c=cm[i], ls=':')
 
-    axs[2, 0].loglog(freq[1:], psd_eff_mod[1:], c=cm[i], label=f'$\\lambda={lambd}$')
-    axs[2, 1].semilogx(
-        freq[1:],
-        # (psd_eff_mod - psd)[1:] / psd[1:],
-        10 * np.log10(psd_eff_mod[1:] / psd[1:]),
-        c=cm[i],
-        label=f'$\\lambda={lambd}$',
-    )
+        # PSD eff as `ifft(1/fft(inv_tt))`
+        ntt_mod = utils.psd_to_ntt(np.reciprocal(ipsd1_eff), lag)
+        psd1_eff_mod = utils.autocorr_to_psd(ntt_mod, SAMPLES)[1:]
 
-    # Plot a dashed line at `fsamp/lambda`
+        axs[0, 2].loglog(freq1, psd1_eff_mod, c=cm[i])
+        axs[1, 2].semilogx(
+            freq1,
+            10 * np.log10(psd1_eff_mod / psd1[model]),
+            c=cm[i],
+        )
+
+        # Plot a dashed line at `fsamp/lambda` and add to legend
+        vline = None
+        for ax in axs.flat:
+            vline = ax.axvline(x=FSAMP / lag, c=cm[i], ls='--', lw=0.8)
+
+        # Add this lambda value to legend elements
+        legend_elements.append((line1, f'$\\lambda={lag}$'))
+
+    # Create legend handles and labels from the stored elements
+    handles, labels = zip(*legend_elements)
+    fig.legend(handles, labels, loc='outside upper center', ncol=len(handles))
+
     for ax in axs.flat:
-        ax.axvline(x=fsamp / lambd, c=cm[i], ls='--')
+        ax.grid(True)
 
-for ax in axs.flat:
-    ax.legend()
-    ax.grid(True)
-
-fig.tight_layout()
-fig.savefig('plots/psd_effective.svg')
+    fig.savefig(f'plots/psd_effective_{model}.svg')
