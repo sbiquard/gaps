@@ -107,45 +107,27 @@ handles, labels = axs[0].get_legend_handles_labels()
 fig.legend(handles, labels, loc='outside upper center', ncols=len(handles))
 
 fig.savefig('plots/baselines_before_after.svg')
-exit()
 
 
 # _________________________________________________________________________________________________
 # Baseline power spectra
+
 fig, ax = plt.subplots()
 
 fit_params_tod, f_tod, psd_tod = utils.fit_psd_to_tod(
-    tod,
-    FSAMP,
-    welch=False,
-    return_periodogram=True,
+    tod, FSAMP, welch=False, return_periodogram=True
 )
 ax.loglog(f_tod[1:], utils.psd_model(f_tod[1:], *fit_params_tod), 'k--', label='PSD of timestream')
 
-# kernel_size = 10
-# kernel = np.ones(kernel_size) / kernel_size
-
-# ax.set_title(f'Power spectra of different baselines (smoothed with kernel of size {kernel_size})')
-# ax.set_title('Power spectra of different baselines')
-# cm = sns.color_palette('Set1')
-
 for i, w0 in enumerate(W0_VALUES):
-    f, psd = welch(baselines[w0], fs=FSAMP, nperseg=LAGMAX)
-    # ax.loglog(f[1:], utils.psd_model(f[1:], *fit_params_tod), c=cm(i), label=f"$\Delta w={2*w0+1}$")
-    # ax.loglog(f[1:], psd[1:], c=cm(i), alpha=0.25)
-    # ax.loglog(
-    #     f[1:], np.convolve(psd, kernel, mode='same')[1:], c=cm[i], label=f'$\\Delta w={2 * w0 + 1}$'
-    # )
-    ax.loglog(
-        f[1:],
-        psd[1:],
-        # c=cm[i],
-        label=f'$\\Delta w={2 * w0 + 1}$',
-    )
+    f, psd = welch(baselines[w0], fs=FSAMP, nperseg=2 * LAGMAX)
+    ax.loglog(f[1:], psd[1:], label=f'$\\Delta w={2 * w0 + 1}$')
 ax.legend()
-ax.set_ylim(bottom=1e-11)
+ax.set_ylim(bottom=1e-4)
+ax.set_xlabel('Frequency [Hz]')
+ax.set_ylabel('PSD [Hz$^{-1}$]')
 ax.grid(True)
-plt.savefig('plots/baseline_power_spectra.svg')
+fig.savefig('plots/baseline_power_spectra.svg')
 
 
 # _________________________________________________________________________________________________
@@ -157,7 +139,7 @@ def cutoff_dma(w0):
     return 0.442947 / np.sqrt(wsize**2 - 1)
 
 
-def plot_baseline_removal(w0, ax=None, plot_bline_fit=False, plot_psd_eff=False):
+def plot_baseline_removal(w0, ax=None, plot_bline_fit=False):
     if ax is None:
         _, ax = plt.subplots()
 
@@ -212,58 +194,20 @@ def plot_baseline_removal(w0, ax=None, plot_bline_fit=False, plot_psd_eff=False)
             label='baseline periodogram',
         )
 
-    # Effective PSD
-    if plot_psd_eff:
-        matching_lambda = 2 * w0
-        itt_model = utils.psd_to_ntt(ipsd_fit, matching_lambda)
-        ipsd_eff = utils.autocorr_to_psd(itt_model, SAMPLES)
-        ax.loglog(
-            freq[1:], 1 / ipsd_eff[1:], c='g', label=f'effective PSD $\\lambda={matching_lambda}$'
-        )
 
-    # ax.legend()
+fig, axs = plt.subplots(
+    2, len(W0_VALUES) // 2, figsize=(8, 8), sharex=True, sharey=True, layout='constrained'
+)
+for i, w0 in enumerate(W0_VALUES):
+    ax = axs.flat[i]
+    plot_baseline_removal(w0, ax=ax)
+    ax.set_ylim(bottom=1e-2)
     ax.grid(True)
+    ax.set(xlabel='Frequency [Hz]', ylabel='PSD [Hz$^{-1}$]')
+    ax.label_outer()
 
-
-# fig, axs = plt.subplots(1, 2, figsize=(12, 6), sharex=True, sharey=True)
-# # fig.suptitle('Before/after baseline removal')
-# plot_baseline_removal(w0_values[0], ax=axs[0], plot_bline_fit=False)
-# plot_baseline_removal(w0_values[2], ax=axs[1], plot_bline_fit=False)
-# for ax in axs:
-#     ax.set_ylim(bottom=1e-11)
-# fig.tight_layout()
-# plt.savefig('plots/baseline_removal_psd_comparison.svg')
-
-# _________________________________________________________________________________________________
-# Matching effective PSD and baseline removal
-
-
-def window_size(f_cutoff_reduced):
-    # return np.sqrt(1 + 0.196202 / np.square(cutoff))
-    return np.sqrt(0.196202 + f_cutoff_reduced**2) / f_cutoff_reduced
-
-
-fig, ax = plt.subplots()
-ax.set_title('Window size corresponding to cutoff at $\\lambda^{-1}$')
-ax.set(xlabel=r'$\lambda$', ylabel='window size')
-ax.grid(True)
-lambdas = np.array([1024, 2048, 4096, 8192, 16384, 32768])
-windows = window_size(1 / lambdas)
-ax.plot(lambdas, windows, 'o-')
-# res = scipy.stats.linregress(lambdas, windows)
-# print(f"R-squared: {res.rvalue**2:.6f}")
-# plt.plot(lambdas, res.intercept + res.slope * lambdas, "r", label=f"slope = {res.slope:.6f}")
-# plt.legend()
-fig.savefig('plots/window_size_vs_lambda.svg')
-
-fig, axs = plt.subplots(1, 2, figsize=(8, 4), sharex=True, sharey=True, layout='constrained')
-# fig.suptitle('Before/after baseline removal')
-plot_baseline_removal(W0_VALUES[0], ax=axs[0], plot_psd_eff=True)
-plot_baseline_removal(W0_VALUES[2], ax=axs[1], plot_psd_eff=True)
-for ax in axs:
-    ax.set_ylim(bottom=1e-11)
 fig.legend(
-    *axs[0].get_legend_handles_labels(),
+    *axs.flat[0].get_legend_handles_labels(),
     loc='outside upper center',
     ncols=5,
 )
