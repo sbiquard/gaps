@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# %%
+
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
@@ -12,150 +12,122 @@ plt.rcParams.update({'figure.figsize': (6, 4), 'figure.dpi': 150, 'savefig.bbox'
 
 
 # parameters
-realization = 657
-telescope = 0
-component = 0
-sindx = 0
-detindx = 0
-sample_rate = 37
-samples = 100000
+REALIZATION = 657
+TELESCOPE = 0
+COMPONENT = 0
+SESSION_INDEX = 0
+DETECTOR_INDEX = 0
+FSAMP = 37
+SAMPLES = 2**17
+LAGMAX = 2**16
+LGAP = LAGMAX // 8
+STEP = LAGMAX // 2
+OFFSET = LAGMAX // 16
+# W0_VALUES = [LAGMAX // n for n in (4, 2, 1)]
+NREAL = 5
 
+# PSD model
 # log(sigma) = -4.82, alpha = -0.87, fknee = 0.05, fmin = 8.84e-04
-sigma2 = 10**-4.82
-alpha = 2.87
-fknee = 1.05
-fmin = 8.84e-4
+SIGMA = 1.0
+ALPHA_ATM = 2.5
+ALPHA_INS = 1.0
+FKNEE_ATM = 1.0
+FKNEE_INS = 0.05
+FMIN = 1e-3
 
-# form the input PSD model
-freq = np.fft.rfftfreq(samples, 1 / sample_rate)
-npsd = len(freq) - 1
+freq = np.fft.rfftfreq(SAMPLES, 1 / FSAMP)
+freq1 = freq[1:]  # Without zero frequency
+npsd = len(freq)
 
-psd_model = utils.psd_model(freq, sigma2, alpha, fknee, fmin)
+psd = {
+    'ins': utils.psd_model(freq, SIGMA, ALPHA_INS, FKNEE_INS, FMIN),
+    'atm': utils.psd_model(freq, SIGMA, ALPHA_ATM, FKNEE_ATM, FMIN),
+}
 # ipsd = utils.inversepsd_model(freq, 1 / sigma2, alpha, fknee, fmin)
-psd_model[0] = 0
+# psd_atm[0] = 0
 
-tod_toast = utils.sim_noise(
-    samples=samples,
-    realization=realization,
-    detindx=detindx,
-    sindx=sindx,
-    telescope=telescope,
-    fsamp=sample_rate,
-    use_toast=True,
-    freq=freq,
-    psd=psd_model,
-)
+tod = {
+    k: utils.sim_noise(
+        samples=SAMPLES,
+        realization=REALIZATION,
+        detindx=DETECTOR_INDEX,
+        sindx=SESSION_INDEX,
+        telescope=TELESCOPE,
+        fsamp=FSAMP,
+        use_toast=True,
+        freq=freq,
+        psd=_psd,
+    )
+    for k, _psd in psd.items()
+}
 
-fit_params = utils.fit_psd_to_tod(tod_toast, sample_rate, welch=False)
-psd_fit = utils.psd_model(freq, *fit_params)
-ipsd_fit = np.reciprocal(psd_fit)
-
-lagmax = 2**16
-invntt = utils.psd_to_invntt(psd_fit, lagmax)
-ntt = utils.effective_ntt(invntt, utils.next_fast_fft_size(samples))
-
-# plt.figure()
-# plt.title('Power spectral densities')
-# plt.loglog(freq[1:], psd_model[1:], c='k', label='model')
-# plt.loglog(freq[1:], psd_fit[1:], label='fit')
-# plt.loglog(freq[1:], utils.compute_psd(tt_bis, samples)[1:], label='eff')
-# plt.xlabel('frequency [$Hz$]')
-# plt.ylabel('PSD in $[tod]^2 / Hz$')
-# plt.grid(True)
-# plt.legend()
-# plt.show()
+fit_params = {k: utils.fit_psd_to_tod(_tod, FSAMP) for k, _tod in tod.items()}
+psd_fit = {k: utils.psd_model(freq, *_params) for k, _params in fit_params.items()}
+ipsd_fit = {k: 1 / v for k, v in psd_fit.items()}
+invntt = {k: utils.psd_to_invntt(_psd_fit, LAGMAX) for k, _psd_fit in psd_fit.items()}
+ntt = {k: utils.effective_ntt(_invntt, SAMPLES) for k, _invntt in invntt.items()}
 
 # ____________________________________________________________
 # 4) Introduce some gaps
 
 
-def get_pix(nsamp, lgap=2**12, step=samples // 5, return_all=False, verbose=True):
-    pix = np.ones(nsamp, dtype=np.int32)
-    valid = np.ones(nsamp, dtype=np.uint8)
-    for i in range(0, nsamp, step):
-        slc = slice(i, i + lgap)
-        pix[slc] = -1
-        valid[slc] = 0
-    if verbose:
-        print(f'Valid samples: {np.sum(valid)}/{samples} = {100 * np.sum(valid) / samples} %')
-    if return_all:
-        return pix, valid, lgap, step
-    else:
-        return pix
+PIX = np.ones(SAMPLES, dtype=np.int32)
+VALID = np.ones(SAMPLES, dtype=np.uint8)
+for i in range(OFFSET, SAMPLES, STEP):
+    slc = slice(i, i + LGAP)
+    PIX[slc] = -1
+    VALID[slc] = 0
 
 
-pix, valid, lgap, step = get_pix(samples, return_all=True)
+def plot_gap_edges(ax, ls='dotted', c='k'):
+    for i in range(0, len(VALID) - 1):
+        if i == 0 and VALID[1] == 0:
+            ax.axvline(x=i, ls=ls, c=c)
+        elif i == len(VALID) - 1 and VALID[i] == 0:
+            ax.axvline(x=i + 1, ls=ls, c=c)
+        elif (VALID[i] + VALID[i + 1]) == 1:
+            # change between i and i + 1
+            ax.axvline(x=0.5 + i, ls=ls, c=c)
 
 
 # ____________________________________________________________
 # 5) Perform gap filling
 
-NREAL = 5
-FACTORS = [1, 2, 4]
-tods_filled = {
-    'fsamp': np.empty((NREAL, samples)),
-    'fact_1': np.empty((NREAL, samples)),
-    'fact_2': np.empty((NREAL, samples)),
-    'fact_4': np.empty((NREAL, samples)),
-}
+tods_filled = {k: np.empty((NREAL, SAMPLES)) for k in ['atm', 'ins']}
 
 for i in tqdm(range(NREAL)):
-    for fact in FACTORS:
-        tods_filled[f'fact_{fact}'][i, :] = utils.sim_constrained_block(
+    for k, _tods in tods_filled.items():
+        _tods[i] = utils.sim_constrained_block(
             False,  # initialize MPI
             False,  # finalize MPI
-            lagmax // fact,
-            tod_toast,
-            ntt,
-            invntt,
-            pix,
-            fsamp=sample_rate,
-            realization=realization + i + 1,
-            detindx=detindx,
-            sindx=sindx,
-            telescope=telescope,
+            -1,
+            tod[k],
+            ntt[k],
+            invntt[k],
+            PIX,
+            fsamp=FSAMP,
+            realization=REALIZATION + i + 1,
+            detindx=DETECTOR_INDEX,
+            sindx=SESSION_INDEX,
+            telescope=TELESCOPE,
         )
-    tods_filled['fsamp'][i, :] = utils.sim_constrained_block(
-        False,  # initialize MPI
-        False,  # finalize MPI
-        int(sample_rate),
-        tod_toast,
-        ntt,
-        invntt,
-        pix,
-        fsamp=sample_rate,
-        realization=realization + i + 1,
-        detindx=detindx,
-        sindx=sindx,
-        telescope=telescope,
-    )
 
+fig, axs = plt.subplots(2, 1, figsize=(8, 4), layout='constrained', sharex=True)
+axs[0].set_title('Instrumental')
+axs[1].set_title('Atmospheric')
+axs[0].plot(tod['ins'], 'k')
+axs[1].plot(tod['atm'], 'k')
+for i in range(min(5, NREAL)):
+    axs[0].plot(tods_filled['ins'][i])
+    axs[1].plot(tods_filled['atm'][i])
+for ax in axs:
+    plot_gap_edges(ax)
+    ax.set_xlim(0, 50_000)
+    ax.set_ylabel('TOD amplitude')
+axs[-1].set_xlabel('Sample number')
+fig.savefig('plots/filled_tods.svg')
 
-plt.figure(figsize=(10, 5))
-plt.title(f'length={samples} - lambda={lagmax} - gaps: {lgap} every {step} samples')
-
-# original timestream
-plt.plot(range(samples), (tod_toast - tod_toast), 'k', label='ref')
-# gap-filled timestreams
-plt.plot(range(samples), (tods_filled['fsamp'][0] - tod_toast), label=r'$\Delta w = f_s$')
-plt.plot(range(samples), (tods_filled['fact_1'][0] - tod_toast), label=r'$\Delta w = 2\lambda$')
-plt.plot(range(samples), (tods_filled['fact_2'][0] - tod_toast), label=r'$\Delta w = \lambda$')
-plt.plot(range(samples), (tods_filled['fact_4'][0] - tod_toast), label=r'$\Delta w = \lambda / 2$')
-
-# gap edges
-for i in range(valid.size - 1):
-    if i == 0 and valid[1] == 0:
-        plt.axvline(x=i, ls=':', c='k')
-    elif i == valid.size - 1 and valid[i] == 0:
-        plt.axvline(x=i + 1, ls=':', c='k')
-    elif (valid[i] + valid[i + 1]) == 1:
-        # change between i and i + 1
-        plt.axvline(x=0.5 + i, ls=':', c='k')
-
-# plt.yscale('symlog')
-# plt.xlim(right=int(lgap * 1.1))
-plt.legend()
-plt.savefig('plots/filled_tods.svg')
+exit()
 
 # periodograms
 
@@ -168,7 +140,7 @@ psds_filled = {
 
 for i in range(NREAL):
     for key in ['fsamp', 'fact_1', 'fact_2', 'fact_4']:
-        fit_params = utils.fit_psd_to_tod(tods_filled[key][i], sample_rate, welch=False)
+        fit_params = utils.fit_psd_to_tod(tods_filled_atm[key][i], FSAMP, welch=False)
         psds_filled[key][i] = utils.psd_model(freq, *fit_params)
 
 # Create dictionaries for PSD averages and standard deviations
