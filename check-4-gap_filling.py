@@ -127,78 +127,40 @@ for ax in axs:
 axs[-1].set_xlabel('Sample number')
 fig.savefig('plots/filled_tods.svg')
 
-exit()
-
 # periodograms
 
-psds_filled = {
-    'fsamp': np.empty((NREAL, len(psd_fit)), dtype=psd_fit.dtype),
-    'fact_1': np.empty((NREAL, len(psd_fit)), dtype=psd_fit.dtype),
-    'fact_2': np.empty((NREAL, len(psd_fit)), dtype=psd_fit.dtype),
-    'fact_4': np.empty((NREAL, len(psd_fit)), dtype=psd_fit.dtype),
-}
+psds_filled = {k: np.empty((NREAL, npsd)) for k in ['ins', 'atm']}
 
 for i in range(NREAL):
-    for key in ['fsamp', 'fact_1', 'fact_2', 'fact_4']:
-        fit_params = utils.fit_psd_to_tod(tods_filled_atm[key][i], FSAMP, welch=False)
-        psds_filled[key][i] = utils.psd_model(freq, *fit_params)
+    for k, _tods in tods_filled.items():
+        psds_filled[k][i] = utils.psd_model(freq, *utils.fit_psd_to_tod(_tods[i], FSAMP))
 
 # Create dictionaries for PSD averages and standard deviations
-psd_avg = {
-    'fsamp': np.mean(psds_filled['fsamp'], axis=0),
-    'fact_1': np.mean(psds_filled['fact_1'], axis=0),
-    'fact_2': np.mean(psds_filled['fact_2'], axis=0),
-    'fact_4': np.mean(psds_filled['fact_4'], axis=0),
-}
-psd_dev = {
-    'fsamp': np.std(psds_filled['fsamp'], axis=0),
-    'fact_1': np.std(psds_filled['fact_1'], axis=0),
-    'fact_2': np.std(psds_filled['fact_2'], axis=0),
-    'fact_4': np.std(psds_filled['fact_4'], axis=0),
-}
+psd_avg = {k: np.mean(v, axis=0) for k, v in psds_filled.items()}
+psd_dev = {k: np.std(v, axis=0) for k, v in psds_filled.items()}
 
-# %%
-fig, axs = plt.subplots(1, 2, figsize=(10, 5), sharex='all')
-fig.suptitle('Before / after comparison')
-
-axs[0].set_title('fitted PSD')
-axs[0].loglog(freq[1:], psd_fit[1:], 'k--', label='before')
-axs[0].set_ylabel('$[tod]^2 / Hz$')
-
-axs[1].set_title('ratio in dB')
-axs[1].axhline(y=0.0, c='k', ls='--', label='before')
-axs[1].set_ylabel('$dB$')
-
-for key, lab in zip(
-    ('fsamp', 'fact_1', 'fact_2', 'fact_4'),
-    (
-        r'$\Delta w = f_s$',
-        r'$\Delta w = 2\lambda$',
-        r'$\Delta w = \lambda$',
-        r'$\Delta w = \lambda / 2$',
-    ),
-):
-    p0 = axs[0].loglog(freq[1:], psd_avg[key][1:], label=lab)
-    axs[0].loglog(freq[1:], (psd_avg[key] - psd_dev[key])[1:], ls=':', c=p0[0].get_color())
-    axs[0].loglog(freq[1:], (psd_avg[key] + psd_dev[key])[1:], ls=':', c=p0[0].get_color())
-    p1 = axs[1].semilogx(freq[1:], 10 * np.log10(psd_avg[key][1:] / psd_fit[1:]), label=lab)
-    axs[1].semilogx(
-        freq[1:],
-        10 * np.log10((psd_avg[key] - psd_dev[key])[1:] / psd_fit[1:]),
-        ls=':',
-        c=p1[0].get_color(),
-    )
-    axs[1].semilogx(
-        freq[1:],
-        10 * np.log10((psd_avg[key] + psd_dev[key])[1:] / psd_fit[1:]),
-        ls=':',
-        c=p1[0].get_color(),
-    )
-
-for ax in axs.flat:
-    ax.set_xlabel('frequency [$Hz$]')
+fig, axs = plt.subplots(1, 2, figsize=(8, 4), sharex=True, layout='constrained')
+axs[0].set_ylabel(r'PSD [$Hz^{-1}$]')
+axs[1].set_ylabel('Ratio [dB]')
+for ax in axs:
     ax.grid(True)
-    ax.legend()
-
-fig.tight_layout()
+    ax.set_xlabel('Frequency [Hz]')
+for k in ['ins', 'atm']:
+    axs[0].loglog(freq1, psd[k][1:], c='k', ls='--', label='model' if k == 'ins' else None)
+    axs[0].loglog(freq1, psd_avg[k][1:], label='Instrumental' if k == 'ins' else 'Atmospheric')
+    axs[0].fill_between(
+        freq1,
+        psd_avg[k][1:] - psd_dev[k][1:],
+        psd_avg[k][1:] + psd_dev[k][1:],
+        alpha=0.5,
+    )
+    axs[1].axhline(y=0.0, c='k', ls='--')
+    axs[1].semilogx(freq1, 10 * np.log10(psd_avg[k] / psd[k])[1:])
+    axs[1].fill_between(
+        freq1,
+        10 * np.log10((psd_avg[k] - psd_dev[k]) / psd[k])[1:],
+        10 * np.log10((psd_avg[k] + psd_dev[k]) / psd[k])[1:],
+        alpha=0.5,
+    )
+fig.legend(loc='outside upper center', ncol=4)
 fig.savefig('plots/gap_filling_consistency.svg')
