@@ -25,16 +25,16 @@ npsd = len(freq) - 1
 
 # PSD model
 # log(sigma) = -4.82, alpha = -0.87, fknee = 0.05, fmin = 8.84e-04
-sigma = 1.0
-alpha_atm = 3.0
-alpha_ins = 1.0
-fknee_atm = 1.0
-fknee_ins = 0.05
-fmin = 1e-3
+SIGMA = 1.0
+ALPHA_ATM = 2.5
+ALPHA_INS = 1.0
+FKNEE_ATM = 1.0
+FKNEE_INS = 0.05
+FMIN = 1e-3
 
 psd = {
-    'ins': utils.psd_model(freq, sigma, alpha_ins, fknee_ins, fmin),
-    'atm': utils.psd_model(freq, sigma, alpha_atm, fknee_atm, fmin),
+    'ins': utils.psd_model(freq, SIGMA, ALPHA_INS, FKNEE_INS, FMIN),
+    'atm': utils.psd_model(freq, SIGMA, ALPHA_ATM, FKNEE_ATM, FMIN),
 }
 psd1 = {k: v[1:] for k, v in psd.items()}
 ipsd = {k: 1 / v for k, v in psd.items()}

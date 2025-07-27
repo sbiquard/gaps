@@ -32,14 +32,14 @@ npsd = len(freq)
 
 # PSD model
 # log(sigma) = -4.82, alpha = -0.87, fknee = 0.05, fmin = 8.84e-04
-sigma = 1.0
-alpha_atm = 3.0
+SIGMA = 1.0
+ALPHA_ATM = 2.5
 # alpha_ins = 1.0
-fknee_atm = 1.0
+FKNEE_ATM = 1.0
 # fknee_ins = 0.05
-fmin = 1e-3
+FMIN = 1e-3
 
-psd = utils.psd_model(freq, sigma, alpha_atm, fknee_atm, fmin)
+psd = utils.psd_model(freq, SIGMA, ALPHA_ATM, FKNEE_ATM, FMIN)
 tod = utils.sim_noise(
     samples=SAMPLES,
     realization=REALIZATION,
@@ -80,8 +80,6 @@ def plot_gap_edges(valid, ax, ls='dotted', c='k'):
             # change between i and i + 1
             ax.axvline(x=0.5 + i, ls=ls, c=c)
 
-
-fs_over_lambd = FSAMP / LAGMAX
 
 baselines = {}
 tods_rm = {}
