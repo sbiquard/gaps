@@ -126,7 +126,7 @@ fig, axs = plt.subplots(1, 2, figsize=(8, 4), layout='constrained', sharey=True)
 axs[0].set_title('Instrumental')
 axs[1].set_title('Atmospheric')
 
-axs[0].set_ylabel('Ratio to model')
+axs[0].set_ylabel('Ratio to model [dB]')
 for ax in axs:
     ax.set(xlabel='Frequency [Hz]')
     ax.grid(True)
@@ -139,7 +139,7 @@ for i_ax, (model, psd_real) in enumerate(psd_realizations.items()):
     ax = axs[i_ax]
 
     # Add model line to both axes and collect for legend
-    model_line = ax.axhline(y=1, c='k', ls='--')
+    model_line = ax.axhline(y=0, c='k', ls='--')  # 0 dB reference line
     if i_ax == 0:
         legend_handles.append(model_line)
 
@@ -151,10 +151,14 @@ for i_ax, (model, psd_real) in enumerate(psd_realizations.items()):
         avg_psd1 = np.average(psd_real[method], axis=0)[1:]
         dev_psd1 = np.std(psd_real[method], axis=0)[1:]
 
-        # Plot in first axis
-        (line,) = ax.semilogx(freq1, avg_psd1 / psd1[model], color=cm[i_method])
-        ax.semilogx(freq1, (avg_psd1 - dev_psd1) / psd1[model], ls=':', color=cm[i_method])
-        ax.semilogx(freq1, (avg_psd1 + dev_psd1) / psd1[model], ls=':', color=cm[i_method])
+        # Convert ratios to decibels
+        ratio_db = 10 * np.log10(avg_psd1 / psd1[model])
+        upper_db = 10 * np.log10((avg_psd1 + dev_psd1) / psd1[model])
+        lower_db = 10 * np.log10((avg_psd1 - dev_psd1) / psd1[model])
+
+        # Plot line and shaded region for one sigma
+        (line,) = ax.semilogx(freq1, ratio_db, color=cm[i_method])
+        ax.fill_between(freq1, lower_db, upper_db, color=cm[i_method], alpha=0.3)
 
         # Only add to legend once
         if i_ax == 0:
