@@ -71,10 +71,10 @@ for model in ['ins', 'atm']:
 
     # Put labels on axes
     for ax in axs[1, :]:
-        ax.set_xlabel(r'Frequency [$Hz$]')
+        ax.set_xlabel('Frequency [Hz]')
 
-    axs[0, 0].set_ylabel(r'PSD [arb. unit]')
-    axs[1, 0].set_ylabel('dB')
+    axs[0, 0].set_ylabel('PSD [arb. unit]')
+    axs[1, 0].set_ylabel('Ratio over model [dB]')
 
     # Plot references
     for ax in axs[0, :]:
