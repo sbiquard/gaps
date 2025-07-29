@@ -123,7 +123,7 @@ for i in range(min(5, NREAL)):
 for ax in axs:
     plot_gap_edges(ax)
     ax.set_xlim(0, 50_000)
-    ax.set_ylabel('TOD amplitude')
+    ax.set_ylabel('TOD amplitude [arb. unit]')
 axs[-1].set_xlabel('Sample number')
 fig.savefig('plots/filled_tods.svg')
 
@@ -140,7 +140,7 @@ psd_avg = {k: np.mean(v, axis=0) for k, v in psds_filled.items()}
 psd_dev = {k: np.std(v, axis=0) for k, v in psds_filled.items()}
 
 fig, axs = plt.subplots(1, 2, figsize=(8, 4), sharex=True, layout='constrained')
-axs[0].set_ylabel(r'PSD [$Hz^{-1}$]')
+axs[0].set_ylabel(r'PSD [arb. unit]')
 axs[1].set_ylabel('Ratio [dB]')
 for ax in axs:
     ax.grid(True)

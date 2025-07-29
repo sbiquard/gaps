@@ -96,15 +96,15 @@ fig, axs = plt.subplots(2, 1, figsize=(10, 6), layout='constrained', sharex=True
 (line2,) = axs[0].plot(tods['ins']['c_ntt'][0])
 (line3,) = axs[0].plot(tods['ins']['toast_psd'][0])
 # (line4,) = axs[0].plot(tods['ins']['py_psd'][0])
-axs[0].set_ylabel('Amplitude')
+axs[0].set_ylabel('Amplitude [arb. unit]')
 
 # Second row for 'atm' timestreams
 # axs[1].plot(tods['atm']['py_ntt'][0])
 axs[1].plot(tods['atm']['c_ntt'][0])
 axs[1].plot(tods['atm']['toast_psd'][0])
 # axs[1].plot(tods['atm']['py_psd'][0])
-axs[1].set_xlabel('Sample')
-axs[1].set_ylabel('Amplitude')
+axs[1].set_xlabel('Sample number')
+axs[1].set_ylabel('Amplitude [arb. unit]')
 
 # Add figure-level legend instead of per-subplot legends
 fig.legend(

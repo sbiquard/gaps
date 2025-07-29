@@ -44,7 +44,7 @@ fig, ax = plt.subplots()
 ax.loglog(freq1, psd1['ins'], label='Instrumental')
 ax.loglog(freq1, psd1['atm'], label='Atmospheric')
 ax.set_xlabel('Frequency [Hz]')
-ax.set_ylabel('PSD [Hz$^{-1}$]')
+ax.set_ylabel('PSD [arb. unit]')
 ax.grid(True)
 ax.legend()
 fig.savefig('plots/psd_comparison.svg')
@@ -73,7 +73,7 @@ for model in ['ins', 'atm']:
     for ax in axs[1, :]:
         ax.set_xlabel(r'Frequency [$Hz$]')
 
-    axs[0, 0].set_ylabel(r'PSD [$Hz^{-1}$]')
+    axs[0, 0].set_ylabel(r'PSD [arb. unit]')
     axs[1, 0].set_ylabel('dB')
 
     # Plot references

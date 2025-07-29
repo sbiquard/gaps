@@ -123,7 +123,7 @@ for i, w0 in enumerate(W0_VALUES):
 ax.legend()
 ax.set_ylim(bottom=1e-4)
 ax.set_xlabel('Frequency [Hz]')
-ax.set_ylabel('PSD [Hz$^{-1}$]')
+ax.set_ylabel('PSD [arb. unit]')
 ax.grid(True)
 fig.savefig('plots/baseline_power_spectra.svg')
 
@@ -201,7 +201,7 @@ for i, w0 in enumerate(W0_VALUES):
     plot_baseline_removal(w0, ax=ax)
     ax.set_ylim(bottom=1e-2)
     ax.grid(True)
-    ax.set(xlabel='Frequency [Hz]', ylabel='PSD [Hz$^{-1}$]')
+    ax.set(xlabel='Frequency [Hz]', ylabel='PSD [arb. unit]')
     ax.label_outer()
 
 fig.legend(
