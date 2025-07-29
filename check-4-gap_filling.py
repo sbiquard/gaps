@@ -24,7 +24,7 @@ LGAP = LAGMAX // 8
 STEP = LAGMAX // 2
 OFFSET = LAGMAX // 16
 # W0_VALUES = [LAGMAX // n for n in (4, 2, 1)]
-NREAL = 5
+NREAL = 25
 
 # PSD model
 # log(sigma) = -4.82, alpha = -0.87, fknee = 0.05, fmin = 8.84e-04
