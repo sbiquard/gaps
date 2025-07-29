@@ -145,7 +145,7 @@ for i_ax, (model, psd_real) in enumerate(psd_realizations.items()):
 
     for i_method, method in enumerate(['c_ntt', 'toast_psd']):
         for j in trange(NREAL):
-            fit_params = utils.fit_psd_to_tod(tods[model][method][j], FSAMP, welch=True)
+            fit_params = utils.fit_psd_to_tod(tods[model][method][j], FSAMP, welch=False)
             psd_real[method][j] = utils.psd_model(freq, *fit_params)
 
         avg_psd1 = np.average(psd_real[method], axis=0)[1:]
