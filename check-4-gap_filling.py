@@ -133,33 +133,40 @@ psds_filled = {k: np.empty((NREAL, npsd)) for k in ['ins', 'atm']}
 
 for i in range(NREAL):
     for k, _tods in tods_filled.items():
-        psds_filled[k][i] = utils.psd_model(freq, *utils.fit_psd_to_tod(_tods[i], FSAMP))
+        psds_filled[k][i] = utils.psd_model(
+            freq, *utils.fit_psd_to_tod(_tods[i], FSAMP, welch=False)
+        )
 
 # Create dictionaries for PSD averages and standard deviations
 psd_avg = {k: np.mean(v, axis=0) for k, v in psds_filled.items()}
 psd_dev = {k: np.std(v, axis=0) for k, v in psds_filled.items()}
 
 fig, axs = plt.subplots(1, 2, figsize=(8, 4), sharex=True, layout='constrained')
-axs[0].set_ylabel(r'PSD [arb. unit]')
+axs[0].set_ylabel('PSD [arb. unit]')
 axs[1].set_ylabel('Ratio [dB]')
 for ax in axs:
     ax.grid(True)
     ax.set_xlabel('Frequency [Hz]')
-for k in ['ins', 'atm']:
+cm = sns.color_palette('Dark2', n_colors=2)
+for ik, k in enumerate(['ins', 'atm']):
     axs[0].loglog(freq1, psd[k][1:], c='k', ls='--', label='model' if k == 'ins' else None)
-    axs[0].loglog(freq1, psd_avg[k][1:], label='Instrumental' if k == 'ins' else 'Atmospheric')
+    axs[0].loglog(
+        freq1, psd_avg[k][1:], c=cm[ik], label='Instrumental' if k == 'ins' else 'Atmospheric'
+    )
     axs[0].fill_between(
         freq1,
         psd_avg[k][1:] - psd_dev[k][1:],
         psd_avg[k][1:] + psd_dev[k][1:],
+        color=cm[ik],
         alpha=0.5,
     )
     axs[1].axhline(y=0.0, c='k', ls='--')
-    axs[1].semilogx(freq1, 10 * np.log10(psd_avg[k] / psd[k])[1:])
+    axs[1].semilogx(freq1, 10 * np.log10(psd_avg[k] / psd[k])[1:], c=cm[ik])
     axs[1].fill_between(
         freq1,
         10 * np.log10((psd_avg[k] - psd_dev[k]) / psd[k])[1:],
         10 * np.log10((psd_avg[k] + psd_dev[k]) / psd[k])[1:],
+        color=cm[ik],
         alpha=0.5,
     )
 fig.legend(loc='outside upper center', ncol=4)

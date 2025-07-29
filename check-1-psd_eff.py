@@ -40,6 +40,7 @@ psd1 = {k: v[1:] for k, v in psd.items()}
 ipsd = {k: 1 / v for k, v in psd.items()}
 
 # Plot comparing the two PSDs
+sns.set_palette("Dark2")
 fig, ax = plt.subplots()
 ax.loglog(freq1, psd1['ins'], label='Instrumental')
 ax.loglog(freq1, psd1['atm'], label='Atmospheric')
