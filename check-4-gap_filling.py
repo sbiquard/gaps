@@ -78,6 +78,9 @@ for i in range(OFFSET, SAMPLES, STEP):
     PIX[slc] = -1
     VALID[slc] = 0
 
+print(f'Gaps of length {LGAP} every {STEP} samples starting at {OFFSET}')
+print(f'Valid samples: {np.sum(VALID) / SAMPLES:%}')
+
 
 def plot_gap_edges(ax, ls='dotted', c='k'):
     for i in range(0, len(VALID) - 1):
