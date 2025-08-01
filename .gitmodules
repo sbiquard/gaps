@@ -1,0 +1,3 @@
+[submodule "gaps-scripts"]
+	path = gaps-scripts
+	url = git@github.com:sbiquard/gaps-scripts.git
