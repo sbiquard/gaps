@@ -39,45 +39,44 @@ cl_ins_nohwp_ref = get_noise_cl(nohwp_ins_ref)
 cl_atm_nohwp_ref = get_noise_cl(nohwp_atm_ref)
 
 
-def plot_reference_runs(hwp_type, cl_ins_ref, cl_atm_ref, sharey=False):
-    """Plot reference runs for a given HWP configuration.
+# Create a 2x3 subplot grid to show both HWP and NoHWP configurations
+with sns.color_palette('Set2'):
+    fig, axs = plt.subplots(2, 3, sharex=True, layout='constrained', figsize=(10, 7))
 
-    Parameters:
-    - hwp_type: String, either 'hwp' or 'nohwp'
-    - cl_ins_ref: Dictionary with instrumental noise spectra
-    - cl_atm_ref: Dictionary with atmospheric noise spectra
-    - sharey: Boolean, whether to share y-axis scale across subplots
-    """
-    fig, axs = plt.subplots(1, 3, sharex=True, sharey=sharey, layout='constrained', figsize=(10, 4))
-
+    # Top row: HWP configuration
     for i, spec in enumerate(['TT', 'EE', 'BB']):
-        if i == 0 or hwp_type == 'nohwp':
-            # Use semilogy for all plots in nohwp case, or just TT in hwp case
-            axs[i].semilogy(ell[ell_range], cl_ins_ref[spec][ell_range], label='Instrumental')
-            axs[i].semilogy(ell[ell_range], cl_atm_ref[spec][ell_range], label='Atmospheric')
+        if i == 0:
+            # Use semilogy for TT in hwp case
+            axs[0, i].semilogy(ell[ell_range], cl_ins_ref[spec][ell_range], label='Instrumental')
+            axs[0, i].semilogy(ell[ell_range], cl_atm_ref[spec][ell_range], label='Atmospheric')
         else:
             # Use regular plot for EE and BB in hwp case
-            axs[i].plot(ell[ell_range], cl_ins_ref[spec][ell_range])
-            axs[i].plot(ell[ell_range], cl_atm_ref[spec][ell_range])
+            axs[0, i].plot(ell[ell_range], cl_ins_ref[spec][ell_range])
+            axs[0, i].plot(ell[ell_range], cl_atm_ref[spec][ell_range])
 
-    # Set labels and titles
-    for ax, _title in zip(axs, ['TT', 'EE', 'BB']):
-        ax.set_title(_title)
-        ax.set_xlabel(r'Multipole $\ell$')
+    # Bottom row: NoHWP configuration
+    for i, spec in enumerate(['TT', 'EE', 'BB']):
+        # Use semilogy for all plots in nohwp case
+        axs[1, i].semilogy(ell[ell_range], cl_ins_nohwp_ref[spec][ell_range], label='Instrumental')
+        axs[1, i].semilogy(ell[ell_range], cl_atm_nohwp_ref[spec][ell_range], label='Atmospheric')
 
-    axs[0].set_ylabel(r'$N_\ell [\mu K^2]$')
+    # Set titles and labels
+    for i, _title in enumerate(['TT', 'EE', 'BB']):
+        axs[0, i].set_title(_title)
+        # Only show x-label on second row
+        axs[1, i].set_xlabel(r'Multipole $\ell$')
+
+    # Set y-axis labels
+    axs[0, 0].set_ylabel(r'$N_\ell [\mu K^2]$')
+    axs[1, 0].set_ylabel(r'$N_\ell [\mu K^2]$')
 
     # Add legend
-    handles, labels = axs[0].get_legend_handles_labels()
+    handles, labels = axs[0, 0].get_legend_handles_labels()
     fig.legend(handles, labels, ncol=len(handles), loc='outside upper center')
 
     # Save figure
-    fig.savefig(f'plots/{hwp_type}_reference_runs.svg')
+    fig.savefig('plots/reference_runs_comparison.svg')
 
-
-with sns.color_palette('Set2'):
-    plot_reference_runs('hwp', cl_ins_ref, cl_atm_ref)
-    plot_reference_runs('nohwp', cl_ins_nohwp_ref, cl_atm_nohwp_ref, sharey=True)
 
 HWP_INS = RUNS / 'hwp/ins'
 runs_hwp_ins = {
