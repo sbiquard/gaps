@@ -82,9 +82,9 @@ HWP_INS = RUNS / 'hwp/ins'
 runs_hwp_ins = {
     'ref': HWP_INS / 'reference',
     'cond': HWP_INS / 'gapfill-cond',
-    'marg': HWP_INS / 'gapfill-marg',
-    'marg-real': HWP_INS / 'gapfill-marg-real-noise',
-    'marg-noise-only': HWP_INS / 'gapfill-marg-noise-only',
+    'offset': HWP_INS / 'gapfill-marg',
+    'offset-real': HWP_INS / 'gapfill-marg-real-noise',
+    'offset-noise-only': HWP_INS / 'gapfill-marg-noise-only',
     'mirror': HWP_INS / 'gapfill-mirror',
     'nested': HWP_INS / 'nested',
 }
@@ -94,9 +94,9 @@ HWP_ATM = RUNS / 'hwp/atm'
 runs_hwp_atm = {
     'ref': HWP_ATM / 'reference',
     'cond': HWP_ATM / 'gapfill-cond',
-    'marg': HWP_ATM / 'gapfill-marg',
-    'marg-real': HWP_ATM / 'gapfill-marg-real-noise',
-    # 'marg-noise-only': HWP_ATM / 'gapfill-marg-noise-only',
+    'offset': HWP_ATM / 'gapfill-marg',
+    'offset-real': HWP_ATM / 'gapfill-marg-real-noise',
+    'offset-noise-only': HWP_ATM / 'gapfill-marg-noise-only',
     'mirror': HWP_ATM / 'gapfill-mirror',
     # 'nested': HWP_ATM / 'nested',
 }
@@ -106,9 +106,9 @@ NOHWP_INS = RUNS / 'nohwp/ins'
 runs_nohwp_ins = {
     'ref': NOHWP_INS / 'reference',
     'cond': NOHWP_INS / 'gapfill-cond',
-    'marg': NOHWP_INS / 'gapfill-marg',
-    'marg-real': NOHWP_INS / 'gapfill-marg-real-noise',
-    'marg-noise-only': NOHWP_INS / 'gapfill-marg-noise-only',
+    'offset': NOHWP_INS / 'gapfill-marg',
+    'offset-real': NOHWP_INS / 'gapfill-marg-real-noise',
+    'offset-noise-only': NOHWP_INS / 'gapfill-marg-noise-only',
     'mirror': NOHWP_INS / 'gapfill-mirror',
     'nested': NOHWP_INS / 'nested',
 }
@@ -118,10 +118,10 @@ NOHWP_ATM = RUNS / 'nohwp/atm'
 runs_nohwp_atm = {
     'ref': NOHWP_ATM / 'reference',
     'cond': NOHWP_ATM / 'gapfill-cond',
-    'marg': NOHWP_ATM / 'gapfill-marg',
-    # 'marg-real': NOHWP_ATM / 'gapfill-marg-real-noise',
-    # 'marg-noise-only': NOHWP_ATM / 'gapfill-marg-noise-only',
-    # 'mirror': NOHWP_ATM / 'gapfill-mirror',
+    'offset': NOHWP_ATM / 'gapfill-marg',
+    'offset-real': NOHWP_ATM / 'gapfill-marg-real-noise',
+    # 'offset-noise-only': NOHWP_ATM / 'gapfill-marg-noise-only',
+    'mirror': NOHWP_ATM / 'gapfill-mirror',
     # 'nested': NOHWP_ATM / 'nested',
 }
 cl_nohwp_atm = {k: get_noise_cl(_run) for k, _run in runs_nohwp_atm.items()}
@@ -160,41 +160,72 @@ plot_comparison(cl_nohwp_ins, 'ref', 'plots/nohwp_instrumental_comparison.svg')
 plot_comparison(cl_nohwp_atm, 'ref', 'plots/nohwp_atmospheric_comparison.svg')
 
 
-def plot_gap_filling_comparison(cl_dict, methods, output_file, ylabel=r'$N_\ell [\mu K^2]$'):
-    """Generate plots comparing different gap filling methods against a reference."""
-    fig, axs = plt.subplots(1, 3, sharex=True, layout='constrained', figsize=(10, 4))
-    for i, ax in enumerate(axs):
-        tt_ee_bb = ['TT', 'EE', 'BB'][i]
-        ax.set(title=tt_ee_bb, xlabel=r'Multipole $\ell$')
-        ax.axhline(y=1.0, c='k', ls='--')
-        for method, label in methods.items():
-            if method in cl_dict:
-                ax.plot(
-                    ell[ell_range],
-                    cl_dict[method][tt_ee_bb][ell_range] / cl_dict['ref'][tt_ee_bb][ell_range],
-                    label=label,
-                )
-    axs[0].set(yscale='log', ylabel=ylabel)
-    handles, labels = axs[0].get_legend_handles_labels()
+def plot_gap_filling_comparison_ratio(
+    cl_dicts, methods, output_file, ylabel=r'Ratio to noise-only'
+):
+    """Generate plots comparing different gap filling methods as a ratio over the noise-only case.
+
+    Args:
+        cl_dicts: Dictionary with 'hwp' and 'nohwp' keys, each containing CL data
+        methods: Dictionary mapping method keys to display labels
+    """
+    fig, axs = plt.subplots(2, 3, sharex=True, layout='constrained', figsize=(10, 8))
+
+    # Process HWP (top row) and NoHWP (bottom row)
+    for row, config in enumerate(['hwp', 'nohwp']):
+        for col, tt_ee_bb in enumerate(['TT', 'EE', 'BB']):
+            ax = axs[row, col]
+            ax.set(title=tt_ee_bb if row == 0 else '')
+            if row == 1:  # Only add x-label to bottom row
+                ax.set(xlabel=r'Multipole $\ell$')
+
+            cl_dict = cl_dicts[config]
+
+            # Add horizontal reference line at y=1.0
+            ax.axhline(y=1.0, c='k', ls='--', alpha=0.5)
+
+            # Get the noise-only data for normalization
+            noise_only_key = 'offset-noise-only'
+            if noise_only_key in cl_dict:
+                noise_only_data = cl_dict[noise_only_key][tt_ee_bb][ell_range]
+
+                # Plot each method as ratio over noise-only
+                for method, label in methods.items():
+                    if method in cl_dict and method != noise_only_key:
+                        ax.plot(
+                            ell[ell_range],
+                            cl_dict[method][tt_ee_bb][ell_range] / noise_only_data,
+                            label=label,
+                        )
+
+    # Set y-axis labels for first column
+    axs[0, 0].set(ylabel=ylabel, yscale='log')
+    axs[1, 0].set(ylabel=ylabel, yscale='log')
+
+    # Add legend
+    handles, labels = axs[0, 0].get_legend_handles_labels()
     fig.legend(handles, labels, ncol=len(handles), loc='outside upper center')
+
     fig.savefig(output_file)
 
 
 # Define gap filling methods with their labels
 gap_filling_methods = {
-    'marg': 'original',
-    'marg-real': 'realistic',
-    'marg-noise-only': 'noise only',
+    'offset': 'original',
+    'offset-real': 'realistic',
+    'offset-noise-only': 'noise only',
 }
 
-# Plot for NoHWP with instrumental noise
-plot_gap_filling_comparison(
-    cl_nohwp_ins, gap_filling_methods, 'plots/nohwp_gap_filling_comparison.svg'
+# Plot for instrumental noise (both HWP and NoHWP)
+plot_gap_filling_comparison_ratio(
+    {'hwp': cl_hwp_ins, 'nohwp': cl_nohwp_ins},
+    gap_filling_methods,
+    'plots/instrumental_gap_filling_ratio_comparison.svg',
 )
 
-# Plot for HWP with atmospheric noise (note: marg-noise-only not available here)
-plot_gap_filling_comparison(
-    cl_hwp_atm,
-    {'marg': 'original', 'marg-real': 'realistic'},
-    'plots/hwp_gap_filling_comparison.svg',
-)
+# # Plot for atmospheric noise (both HWP and NoHWP)
+# plot_gap_filling_comparison_ratio(
+#     {'hwp': cl_hwp_atm, 'nohwp': cl_nohwp_atm},
+#     gap_filling_methods,
+#     'plots/atmospheric_gap_filling_ratio_comparison.svg',
+# )
