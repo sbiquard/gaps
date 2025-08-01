@@ -12,7 +12,6 @@ plt.rcParams.update(
 )
 
 RUNS = Path('./gaps-scripts/runs')
-# METHODS = ['reference', 'cond', 'marg', 'mirror', 'nested']
 
 # make plots directory if it does not exist
 Path('plots').mkdir(exist_ok=True)
@@ -41,7 +40,7 @@ cl_atm_nohwp_ref = get_noise_cl(nohwp_atm_ref)
 
 # Create a 2x3 subplot grid to show both HWP and NoHWP configurations
 with sns.color_palette('Set2'):
-    fig, axs = plt.subplots(2, 3, sharex=True, layout='constrained', figsize=(10, 7))
+    fig, axs = plt.subplots(2, 3, sharex=True, layout='constrained', figsize=(10, 6))
 
     # Top row: HWP configuration
     for i, spec in enumerate(['TT', 'EE', 'BB']):
@@ -67,8 +66,8 @@ with sns.color_palette('Set2'):
         axs[1, i].set_xlabel(r'Multipole $\ell$')
 
     # Set y-axis labels
-    axs[0, 0].set_ylabel(r'$N_\ell [\mu K^2]$')
-    axs[1, 0].set_ylabel(r'$N_\ell [\mu K^2]$')
+    axs[0, 0].set_ylabel('HWP\n$N_\\ell [\\mu K^2]$')
+    axs[1, 0].set_ylabel('No HWP\n$N_\\ell [\\mu K^2]$')
 
     # Add legend
     handles, labels = axs[0, 0].get_legend_handles_labels()
@@ -76,7 +75,6 @@ with sns.color_palette('Set2'):
 
     # Save figure
     fig.savefig('plots/reference_runs_comparison.svg')
-
 
 HWP_INS = RUNS / 'hwp/ins'
 runs_hwp_ins = {
@@ -120,56 +118,74 @@ runs_nohwp_atm = {
     'cond': NOHWP_ATM / 'gapfill-cond',
     'offset': NOHWP_ATM / 'gapfill-marg',
     'offset-real': NOHWP_ATM / 'gapfill-marg-real-noise',
-    # 'offset-noise-only': NOHWP_ATM / 'gapfill-marg-noise-only',
+    'offset-noise-only': NOHWP_ATM / 'gapfill-marg-noise-only',
     'mirror': NOHWP_ATM / 'gapfill-mirror',
     # 'nested': NOHWP_ATM / 'nested',
 }
 cl_nohwp_atm = {k: get_noise_cl(_run) for k, _run in runs_nohwp_atm.items()}
 
 
-def plot_comparison(cl_dict, ref_key, output_file):
-    fig, axs = plt.subplots(1, 3, sharex=True, layout='constrained', figsize=(10, 4))
-    for i, ax in enumerate(axs):
-        tt_ee_bb = ['TT', 'EE', 'BB'][i]
-        ax.set(title=tt_ee_bb, xlabel=r'Multipole $\ell$')
+def plot_comparison(cl_dict_hwp, cl_dict_nohwp, ref_key, output_file):
+    fig, axs = plt.subplots(2, 3, sharex=True, layout='constrained', figsize=(10, 6))
+    cm = sns.color_palette(as_cmap=True)
+
+    # Top row: HWP configuration
+    for i, tt_ee_bb in enumerate(['TT', 'EE', 'BB']):
+        ax = axs[0, i]
+        ax.set(title=tt_ee_bb)
         ax.axhline(y=1.0, c='k', ls='--')
-        for k, cl in cl_dict.items():
-            if k == ref_key:
+        for ik, k in enumerate(['cond', 'offset-real', 'offset-noise-only', 'mirror', 'nested']):
+            if k not in cl_dict_hwp:
                 continue
             ax.plot(
                 ell[ell_range],
-                cl[tt_ee_bb][ell_range] / cl_dict[ref_key][tt_ee_bb][ell_range],
+                cl_dict_hwp[k][tt_ee_bb][ell_range] / cl_dict_hwp[ref_key][tt_ee_bb][ell_range],
+                color=cm[ik],
                 label=k,
             )
-    axs[0].set(yscale='log', ylabel='Ratio')
-    handles, labels = axs[0].get_legend_handles_labels()
+        ax.set(yscale='log')
+        if i == 0:
+            ax.set(ylabel='HWP\nRatio')
+
+    # Bottom row: NoHWP configuration
+    for i, tt_ee_bb in enumerate(['TT', 'EE', 'BB']):
+        ax = axs[1, i]
+        ax.axhline(y=1.0, c='k', ls='--')
+        ax.set(xlabel=r'Multipole $\ell$')
+        for ik, k in enumerate(['cond', 'offset-real', 'offset-noise-only', 'mirror', 'nested']):
+            if k not in cl_dict_nohwp:
+                continue
+            ax.plot(
+                ell[ell_range],
+                cl_dict_nohwp[k][tt_ee_bb][ell_range] / cl_dict_nohwp[ref_key][tt_ee_bb][ell_range],
+                color=cm[ik],
+                label=k,
+            )
+        ax.set(yscale='log')
+        if i == 0:
+            ax.set(ylabel='No HWP\nRatio')
+
+    # Add title and legend
+    handles, labels = axs[0, 0].get_legend_handles_labels()
     fig.legend(handles, labels, ncol=len(handles), loc='outside upper center')
     fig.savefig(output_file)
 
 
-# HWP with instrumental noise
-plot_comparison(cl_hwp_ins, 'ref', 'plots/hwp_instrumental_comparison.svg')
+# Combined plots for instrumental noise (HWP and NoHWP)
+plot_comparison(cl_hwp_ins, cl_nohwp_ins, 'ref', 'plots/instrumental_comparison.svg')
 
-# HWP with atmospheric noise
-plot_comparison(cl_hwp_atm, 'ref', 'plots/hwp_atmospheric_comparison.svg')
-
-# No HWP with instrumental noise
-plot_comparison(cl_nohwp_ins, 'ref', 'plots/nohwp_instrumental_comparison.svg')
-
-# No HWP with atmospheric noise
-plot_comparison(cl_nohwp_atm, 'ref', 'plots/nohwp_atmospheric_comparison.svg')
+# Combined plots for atmospheric noise (HWP and NoHWP)
+plot_comparison(cl_hwp_atm, cl_nohwp_atm, 'ref', 'plots/atmospheric_comparison.svg')
 
 
-def plot_gap_filling_comparison_ratio(
-    cl_dicts, methods, output_file, ylabel=r'Ratio to noise-only'
-):
+def plot_gap_filling_comparison_ratio(cl_dicts, methods, output_file):
     """Generate plots comparing different gap filling methods as a ratio over the noise-only case.
 
     Args:
         cl_dicts: Dictionary with 'hwp' and 'nohwp' keys, each containing CL data
         methods: Dictionary mapping method keys to display labels
     """
-    fig, axs = plt.subplots(2, 3, sharex=True, layout='constrained', figsize=(10, 8))
+    fig, axs = plt.subplots(2, 3, sharex=True, layout='constrained', figsize=(10, 6))
 
     # Process HWP (top row) and NoHWP (bottom row)
     for row, config in enumerate(['hwp', 'nohwp']):
@@ -199,8 +215,8 @@ def plot_gap_filling_comparison_ratio(
                         )
 
     # Set y-axis labels for first column
-    axs[0, 0].set(ylabel=ylabel, yscale='log')
-    axs[1, 0].set(ylabel=ylabel, yscale='log')
+    axs[0, 0].set(ylabel='HWP\nRatio to noise-only', yscale='log')
+    axs[1, 0].set(ylabel='No HWP\nRatio to noise-only', yscale='log')
 
     # Add legend
     handles, labels = axs[0, 0].get_legend_handles_labels()
@@ -223,9 +239,9 @@ plot_gap_filling_comparison_ratio(
     'plots/instrumental_gap_filling_ratio_comparison.svg',
 )
 
-# # Plot for atmospheric noise (both HWP and NoHWP)
-# plot_gap_filling_comparison_ratio(
-#     {'hwp': cl_hwp_atm, 'nohwp': cl_nohwp_atm},
-#     gap_filling_methods,
-#     'plots/atmospheric_gap_filling_ratio_comparison.svg',
-# )
+# Plot for atmospheric noise (both HWP and NoHWP)
+plot_gap_filling_comparison_ratio(
+    {'hwp': cl_hwp_atm, 'nohwp': cl_nohwp_atm},
+    gap_filling_methods,
+    'plots/atmospheric_gap_filling_ratio_comparison.svg',
+)
