@@ -81,7 +81,7 @@ for model in ['ins', 'atm']:
     for ax in axs[0, :]:
         ref_line = ax.loglog(freq1, psd1[model], c='k')[0]
 
-    legend_elements.append((ref_line, 'model'))
+    # legend_elements.append((ref_line, 'model'))
 
     # Plots curves for different lambda values
     LAGS = [4096, 8192, 16384, 32768]
